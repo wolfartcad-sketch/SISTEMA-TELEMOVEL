@@ -1,7 +1,6 @@
 import streamlit as st
 import webbrowser
 import time
-import pyautogui
 import pyperclip
 import re
 import pandas as pd
