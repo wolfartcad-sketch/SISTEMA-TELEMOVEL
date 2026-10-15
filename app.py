@@ -115,6 +115,8 @@ if IS_CLOUD:
     st.subheader("📱 Gerador de Mensagem Padronizada para WhatsApp")
     st.markdown("Preencha os campos abaixo no telemóvel para gerar a mensagem com o padrão correto para envio.")
 
+    empresa_gen = st.selectbox("Empresa / Tipo", ["ASSERTEC", "AMIGO"], key="gen_empresa")
+
     # Regra automática para a AMIGO ou escolha manual para a ASSERTEC
     if empresa_gen == "AMIGO":
         tecnico_gen = "ANDERSON WOLFART MOLLERKE"
