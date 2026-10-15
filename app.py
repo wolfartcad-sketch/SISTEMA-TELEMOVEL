@@ -169,7 +169,7 @@ if "mensagem_gerada_final" in st.session_state and st.session_state["mensagem_ge
         link_whatsapp = f"https://wa.me/?text={mensagem_url}"
         
 # Botão nativo do Streamlit para o WhatsApp
-    st.link_button("📲 Enviar diretamente para o WhatsApp", link_whatsapp)
+        st.link_button("📲 Enviar diretamente para o WhatsApp", link_whatsapp)
 
 # Interrompe a execução aqui no telemóvel para não carregar a gestão
 st.stop()
