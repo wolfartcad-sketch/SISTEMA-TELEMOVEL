@@ -155,7 +155,7 @@ if st.button("✨ Gerar Mensagem Pronta"):
         Protocolo: {protocolo_gen}
         Cidade: {cidade_gen}
         Serviço: {servico_gen}
-        Metragem: {metragem_gen}m
+        Metragem: {metragem_gen}
         Obs: {obs_gen}"""
         st.session_state["mensagem_gerada_final"] = mensagem_gerada
 
