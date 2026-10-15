@@ -163,7 +163,7 @@ if "mensagem_gerada_final" in st.session_state and st.session_state["mensagem_ge
         st.code(st.session_state["mensagem_gerada_final"], language="text")
         st.info("💡 **Como copiar no telemóvel:** Clica no **ícone de copiar** no canto superior direito da caixa cinza acima!")
 
-    # Interrompe a execução aqui no telemóvel para não carregar a gestão
+# Interrompe a execução aqui no telemóvel para não carregar a gestão
     st.stop()
 
 # Se estiver no PC, continua normalmente criando as abas habituais:
