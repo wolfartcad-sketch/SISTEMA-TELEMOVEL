@@ -162,7 +162,13 @@ if st.button("✨ Gerar Mensagem Pronta"):
 if "mensagem_gerada_final" in st.session_state and st.session_state["mensagem_gerada_final"]:
         st.markdown("### 📋 Mensagem Gerada:")
         st.code(st.session_state["mensagem_gerada_final"], language="text")
-        st.info("💡 **Como copiar no telemóvel:** Clica no **ícone de copiar** no canto superior direito da caixa cinza acima!")
+        
+        # Prepara o link direto para o WhatsApp
+        mensagem_url = urllib.parse.quote(st.session_state["mensagem_gerada_final"])
+        link_whatsapp = f"https://wa.me/?text={mensagem_url}"
+        
+# Botão nativo do Streamlit para o WhatsApp
+    st.link_button("📲 Enviar diretamente para o WhatsApp", link_whatsapp, use_container_width=True)
 
 # Interrompe a execução aqui no telemóvel para não carregar a gestão
 st.stop()
