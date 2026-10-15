@@ -8,6 +8,8 @@ import openpyxl
 import os
 from datetime import datetime
 
+IS_CLOUD = os.path.exists("/mount/src")
+
 st.set_page_config(page_title="Sistema de Atendimento - Assertec", layout="wide")
 
 st.title("Sistema de Atendimento - Automação Integrada ⚡")
