@@ -143,17 +143,19 @@ if IS_CLOUD:
     
     cidade_gen = st.selectbox("Cidade", cidades_disponiveis, key="gen_cidade")
     servico_gen = st.selectbox("Serviço Realizado", servicos_disponiveis, key="gen_servico")
+    metragem_gen = st.number_input("Metragem (m)", min_value=0, value=0, step=1, key="gen_metragem")
     obs_gen = st.text_area("Observações", placeholder="EX: Refeita configurações nos equipamentos...", key="gen_obs")
 
-    if st.button("✨ Gerar Mensagem Pronta"):
+if st.button("✨ Gerar Mensagem Pronta"):
         mensagem_gerada = f"""{empresa_gen}
-{tecnico_gen}
-Técnico: {nome_tec_completo}
-Cliente: {cliente_gen.upper()}
-Protocolo: {protocolo_gen}
-Cidade: {cidade_gen}
-Serviço: {servico_gen}
-Obs: {obs_gen}"""
+        {tecnico_gen}
+        Técnico: {nome_tec_completo}
+        Cliente: {cliente_gen.upper()}
+        Protocolo: {protocolo_gen}
+        Cidade: {cidade_gen}
+        Serviço: {servico_gen}
+        Metragem: {metragem_gen}m
+        Obs: {obs_gen}"""
         st.session_state["mensagem_gerada_final"] = mensagem_gerada
 
     if "mensagem_gerada_final" in st.session_state and st.session_state["mensagem_gerada_final"]:
