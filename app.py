@@ -144,6 +144,8 @@ if IS_CLOUD:
     cidade_gen = st.selectbox("Cidade", cidades_disponiveis, key="gen_cidade")
     servico_gen = st.selectbox("Serviço Realizado", servicos_disponiveis, key="gen_servico")
     metragem_gen = st.number_input("Metragem (m)", min_value=0, value=0, step=1, key="gen_metragem")
+    metragem_gen = st.number_input("Metragem (m)", min_value=0, value=0, step=1, key="gen_metragem")
+    lpu_gen = st.number_input("LPU", min_value=0, value=1, step=1, key="gen_lpu")
     obs_gen = st.text_area("Observações", placeholder="EX: Refeita configurações nos equipamentos...", key="gen_obs")
 
 if st.button("✨ Gerar Mensagem Pronta"):
