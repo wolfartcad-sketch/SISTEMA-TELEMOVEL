@@ -158,7 +158,7 @@ if st.button("✨ Gerar Mensagem Pronta"):
         Obs: {obs_gen}"""
         st.session_state["mensagem_gerada_final"] = mensagem_gerada
 
-    if "mensagem_gerada_final" in st.session_state and st.session_state["mensagem_gerada_final"]:
+if "mensagem_gerada_final" in st.session_state and st.session_state["mensagem_gerada_final"]:
         st.markdown("### 📋 Mensagem Gerada:")
         st.code(st.session_state["mensagem_gerada_final"], language="text")
         st.info("💡 **Como copiar no telemóvel:** Clica no **ícone de copiar** no canto superior direito da caixa cinza acima!")
