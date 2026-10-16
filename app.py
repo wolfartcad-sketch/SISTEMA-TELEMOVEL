@@ -13,7 +13,7 @@ IS_CLOUD = os.path.exists("/mount/src")
 
 st.set_page_config(page_title="Sistema de Atendimento - Assertec", layout="wide")
 
-st.title("Sistema de Atendimento - Automação Integrada ⚡")
+st.title("Sistema de Atendimento - Automação Integrada FibraWer ⚡")
 
 # --- LISTAS OFICIAIS DE APOIO ---
 lista_cidades_assertec = [
