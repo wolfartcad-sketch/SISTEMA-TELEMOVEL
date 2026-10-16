@@ -147,7 +147,7 @@ else:
 # ==========================================
 # ABA 1: GESTÃO & COMPUTADOR
 # ==========================================
-    if aba_gestao is not None:
+if aba_gestao is not None:
     with aba_gestao:
 
     def limpar_campo():
