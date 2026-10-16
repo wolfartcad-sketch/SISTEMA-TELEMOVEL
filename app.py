@@ -1,8 +1,6 @@
 import streamlit as st
 import webbrowser
 import time
-import pyautogui
-import pyperclip
 import re
 import pandas as pd
 import openpyxl
@@ -11,6 +9,13 @@ from datetime import datetime
 import urllib.parse
 
 IS_CLOUD = os.path.exists("/mount/src")
+
+if not IS_CLOUD:
+    import pyautogui
+    import pyperclip
+else:
+    pyautogui = None
+    pyperclip = None
 
 # Configuração de página alterada para centrado e com limite elegante
 st.set_page_config(page_title="Sistema de Atendimento - Assertec", layout="centered")
