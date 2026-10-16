@@ -1,13 +1,15 @@
 import streamlit as st
 import webbrowser
 import time
-import pyautogui
 import pyperclip
 import re
 import pandas as pd
 import openpyxl
 import os
 from datetime import datetime
+import urllib.parse
+
+IS_CLOUD = os.path.exists("/mount/src")
 
 st.set_page_config(page_title="Sistema de Atendimento - Assertec", layout="wide")
 
@@ -109,7 +111,70 @@ lista_servicos_amigo_global = [
     "VISTORIA TÉCNICA / VIABILIDADE TÉCNICA"
 ]
 
-# --- CRIAÇÃO DE ABAS ---
+# --- CONTROLO CONDICIONAL PARA O TELEMÓVEL (NUVEM) ---
+if IS_CLOUD:
+    st.subheader("📱 Gerador de Mensagem Padronizada para WhatsApp")
+    st.markdown("Preencha os campos abaixo no telemóvel para gerar a mensagem com o padrão correto para envio.")
+
+    empresa_gen = st.selectbox("Empresa / Tipo", ["ASSERTEC", "AMIGO"], key="gen_empresa")
+
+    # Regra automática para a AMIGO ou escolha manual para a ASSERTEC
+    if empresa_gen == "AMIGO":
+        tecnico_gen = "ANDERSON WOLFART MOLLERKE"
+        nome_tec_completo = "ANDERSON WOLFART MOLLERKE"
+        st.info("ℹ️ Técnico definido automaticamente para a AMIGO: **ANDERSON WOLFART MOLLERKE**")
+    else:
+        tecnico_selecionado = st.selectbox("Técnico Responsável", ["ANDERSON", "MARCIO"], key="gen_tecnico")
+        if tecnico_selecionado == "ANDERSON":
+            tecnico_gen = "ANDERSON"
+            nome_tec_completo = "Anderson"
+        else:
+            tecnico_gen = "MARCIO"
+            nome_tec_completo = "Márcio"
+
+    if empresa_gen == "ASSERTEC":
+        cidades_disponiveis = lista_cidades_assertec
+        servicos_disponiveis = lista_servicos_assertec_global
+    else:
+        cidades_disponiveis = lista_cidades_amigo
+        servicos_disponiveis = lista_servicos_amigo_global
+
+    cliente_gen = st.text_input("Nome do Cliente", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="gen_cliente")
+    protocolo_gen = st.text_input("Número do Protocolo", placeholder="EX: 114619", key="gen_protocolo")
+    
+    cidade_gen = st.selectbox("Cidade", cidades_disponiveis, key="gen_cidade")
+    servico_gen = st.selectbox("Serviço Realizado", servicos_disponiveis, key="gen_servico")
+    metragem_gen = st.number_input("Metragem (m)", min_value=0, value=0, step=1, key="gen_metragem")
+    lpu_gen = st.number_input("LPU", min_value=0, value=1, step=1, key="gen_lpu")
+    obs_gen = st.text_area("Observações", placeholder="EX: Refeita configurações nos equipamentos...", key="gen_obs")
+
+if st.button("✨ Gerar Mensagem Pronta"):
+        mensagem_gerada = f"""{empresa_gen}
+        {tecnico_gen}
+        Técnico: {nome_tec_completo}
+        Cliente: {cliente_gen.upper()}
+        Protocolo: {protocolo_gen}
+        Cidade: {cidade_gen}
+        Serviço: {servico_gen}
+        Metragem: {metragem_gen}
+        Obs: {obs_gen}"""
+        st.session_state["mensagem_gerada_final"] = mensagem_gerada
+
+if "mensagem_gerada_final" in st.session_state and st.session_state["mensagem_gerada_final"]:
+        st.markdown("### 📋 Mensagem Gerada:")
+        st.code(st.session_state["mensagem_gerada_final"], language="text")
+        
+        # Prepara o link direto para o WhatsApp
+        mensagem_url = urllib.parse.quote(st.session_state["mensagem_gerada_final"])
+        link_whatsapp = f"https://wa.me/?text={mensagem_url}"
+        
+# Botão nativo do Streamlit para o WhatsApp
+        st.link_button("📲 Enviar diretamente para o WhatsApp", link_whatsapp)
+
+# Interrompe a execução aqui no telemóvel para não carregar a gestão
+st.stop()
+
+# Se estiver no PC, continua normalmente criando as abas habituais:
 aba_gestao, aba_gerador = st.tabs(["💻 Gestão & Computador (Checklists & Excel)", "📱 Gerador de Mensagens (Telemóvel)"])
 
 # ==========================================
