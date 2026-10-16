@@ -136,19 +136,19 @@ lista_servicos_amigo_global = [
 
 # --- CRIAÇÃO DAS ABAS PRINCIPAIS ---
 if IS_CLOUD:
-    # No telemóvel/nuvem: cria apenas uma aba contendo diretamente o gerador
-    tabs = st.tabs(["📱 Gerador de Mensagens (Telemóvel)"])
-    aba_gerador = tabs[0]
-    aba_gestao = None
+    # No telemóvel/nuvem: cria apenas o contentor do gerador diretamente
+    aba_gerador = st.container()
 else:
     # No computador local: cria as duas abas normais
     aba_gestao, aba_gerador = st.tabs(["💻 Gestão & Computador (Checklists & Excel)", "📱 Gerador de Mensagens (Telemóvel)"])
+    
+    # Inicia o bloco da aba de gestão apenas aqui, sem alterar a indentação do teu código principal
+    with aba_gestao:
 
 # ==========================================
 # ABA 1: GESTÃO & COMPUTADOR
 # ==========================================
-if aba_gestao is not None:
-    with aba_gestao:
+
 
     def limpar_campo():
         st.session_state["msg_input"] = ""
