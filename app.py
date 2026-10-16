@@ -141,16 +141,14 @@ if IS_CLOUD:
 else:
     # No computador local: cria as duas abas normais
     aba_gestao, aba_gerador = st.tabs(["💻 Gestão & Computador (Checklists & Excel)", "📱 Gerador de Mensagens (Telemóvel)"])
-    
-    # Inicia o bloco da aba de gestão apenas aqui, sem alterar a indentação do teu código principal
-    with aba_gestao:
 
 # ==========================================
 # ABA 1: GESTÃO & COMPUTADOR
 # ==========================================
+if not IS_CLOUD:
 
 
-    def limpar_campo():
+                            def limpar_campo():
         st.session_state["msg_input"] = ""
         st.session_state["mensagem_processada"] = False
         st.session_state["tec_msg"] = ""
