@@ -134,8 +134,14 @@ lista_servicos_amigo_global = [
     "VISTORIA TÉCNICA / VIABILIDADE TÉCNICA"
 ]
 
-# --- CRIAÇÃO DAS ABAS PRINCIPAIS ---
-aba_gestao, aba_gerador = st.tabs(["💻 Gestão & Computador (Checklists & Excel)", "📱 Gerador de Mensagens (Telemóvel)"])
+# --- CRIAÇÃO DAS ABAS PRINCIPAIS (Oculta Gestão no Cloud/Telemóvel) ---
+if IS_CLOUD:
+    # No telemóvel/nuvem, mostra apenas o Gerador de Mensagens diretamente
+    aba_gerador = st.container()
+    aba_gestao = None
+else:
+    # No PC local, mostra as duas abas completas
+    aba_gestao, aba_gerador = st.tabs(["💻 Gestão & Computador (Checklists & Excel)", "📱 Gerador de Mensagens (Telemóvel)"])
 
 # ==========================================
 # ABA 1: GESTÃO & COMPUTADOR
