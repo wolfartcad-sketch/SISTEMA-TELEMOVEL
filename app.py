@@ -1,6 +1,7 @@
 import streamlit as st
 import webbrowser
 import time
+import pyautogui
 import pyperclip
 import re
 import pandas as pd
@@ -11,7 +12,24 @@ import urllib.parse
 
 IS_CLOUD = os.path.exists("/mount/src")
 
-st.set_page_config(page_title="Sistema de Atendimento - Assertec", layout="wide")
+# Configuração de página alterada para centrado e com limite elegante
+st.set_page_config(page_title="Sistema de Atendimento - Assertec", layout="centered")
+
+# CSS personalizado para limitar a largura máxima do container ao tamanho do título
+st.markdown(
+    """
+    <style>
+    .block-container {
+        max-width: 900px;
+        padding-top: 2rem;
+        padding-right: 2rem;
+        padding-left: 2rem;
+        padding-bottom: 2rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 st.title("Sistema de Atendimento - Automação Integrada FibraWer ⚡")
 
@@ -111,70 +129,7 @@ lista_servicos_amigo_global = [
     "VISTORIA TÉCNICA / VIABILIDADE TÉCNICA"
 ]
 
-# --- CONTROLO CONDICIONAL PARA O TELEMÓVEL (NUVEM) ---
-if IS_CLOUD:
-    st.subheader("📱 Gerador de Mensagem Padronizada para WhatsApp")
-    st.markdown("Preencha os campos abaixo no telemóvel para gerar a mensagem com o padrão correto para envio.")
-
-    empresa_gen = st.selectbox("Empresa / Tipo", ["ASSERTEC", "AMIGO"], key="gen_empresa")
-
-    # Regra automática para a AMIGO ou escolha manual para a ASSERTEC
-    if empresa_gen == "AMIGO":
-        tecnico_gen = "ANDERSON WOLFART MOLLERKE"
-        nome_tec_completo = "ANDERSON WOLFART MOLLERKE"
-        st.info("ℹ️ Técnico definido automaticamente para a AMIGO: **ANDERSON WOLFART MOLLERKE**")
-    else:
-        tecnico_selecionado = st.selectbox("Técnico Responsável", ["ANDERSON", "MARCIO"], key="gen_tecnico")
-        if tecnico_selecionado == "ANDERSON":
-            tecnico_gen = "ANDERSON"
-            nome_tec_completo = "Anderson"
-        else:
-            tecnico_gen = "MARCIO"
-            nome_tec_completo = "Márcio"
-
-    if empresa_gen == "ASSERTEC":
-        cidades_disponiveis = lista_cidades_assertec
-        servicos_disponiveis = lista_servicos_assertec_global
-    else:
-        cidades_disponiveis = lista_cidades_amigo
-        servicos_disponiveis = lista_servicos_amigo_global
-
-    cliente_gen = st.text_input("Nome do Cliente", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="gen_cliente")
-    protocolo_gen = st.text_input("Número do Protocolo", placeholder="EX: 114619", key="gen_protocolo")
-    
-    cidade_gen = st.selectbox("Cidade", cidades_disponiveis, key="gen_cidade")
-    servico_gen = st.selectbox("Serviço Realizado", servicos_disponiveis, key="gen_servico")
-    metragem_gen = st.number_input("Metragem (m)", min_value=0, value=0, step=1, key="gen_metragem")
-    lpu_gen = st.number_input("LPU", min_value=0, value=1, step=1, key="gen_lpu")
-    obs_gen = st.text_area("Observações", placeholder="EX: Refeita configurações nos equipamentos...", key="gen_obs")
-
-if st.button("✨ Gerar Mensagem Pronta"):
-        mensagem_gerada = f"""{empresa_gen}
-        {tecnico_gen}
-        Técnico: {nome_tec_completo}
-        Cliente: {cliente_gen.upper()}
-        Protocolo: {protocolo_gen}
-        Cidade: {cidade_gen}
-        Serviço: {servico_gen}
-        Metragem: {metragem_gen}
-        Obs: {obs_gen}"""
-        st.session_state["mensagem_gerada_final"] = mensagem_gerada
-
-if "mensagem_gerada_final" in st.session_state and st.session_state["mensagem_gerada_final"]:
-        st.markdown("### 📋 Mensagem Gerada:")
-        st.code(st.session_state["mensagem_gerada_final"], language="text")
-        
-        # Prepara o link direto para o WhatsApp
-        mensagem_url = urllib.parse.quote(st.session_state["mensagem_gerada_final"])
-        link_whatsapp = f"https://wa.me/?text={mensagem_url}"
-        
-# Botão nativo do Streamlit para o WhatsApp
-        st.link_button("📲 Enviar diretamente para o WhatsApp", link_whatsapp)
-
-# Interrompe a execução aqui no telemóvel para não carregar a gestão
-st.stop()
-
-# Se estiver no PC, continua normalmente criando as abas habituais:
+# --- CRIAÇÃO DAS ABAS PRINCIPAIS ---
 aba_gestao, aba_gerador = st.tabs(["💻 Gestão & Computador (Checklists & Excel)", "📱 Gerador de Mensagens (Telemóvel)"])
 
 # ==========================================
@@ -492,7 +447,7 @@ with aba_gestao:
         elif formulario_escolhido == "Brasil TecPar / Amigo":
             btn_executar_amigo = st.button("🚀 Executar Amigo", key="btn_exec_amig_topo")
             if btn_executar_amigo:
-                tecnico_amigo_val = st.session_state.get("tec", "")
+                tecnico_amigo_val = "ANDERSON WOLFART MOLLERKE"
                 cidade_importada_amigo = st.session_state.get("cidade", "")
                 servico_importado_amigo = st.session_state.get("servico", "")
                 cliente_val = st.session_state.get("cli", "")
@@ -767,114 +722,75 @@ with aba_gestao:
             st.success(f"✅ Planilha Amigo aberta! Procurou por **'{termo_pesquisa_global}'**.")
 
     st.markdown("---")
-    formulario_escolhido = st.session_state["formulario_escolhido"]
-    st.info(f"📋 Formulário ativo no momento: **{formulario_escolhido}** | Técnico da Mensagem: **{st.session_state.get('tec_msg', 'N/D')}**")
+    
+    # Exibe o relatório de conferência apenas se uma mensagem tiver sido processada
+    if st.session_state.get("mensagem_processada", False):
+        formulario_escolhido = st.session_state["formulario_escolhido"]
+        st.info(f"📋 Formulário ativo no momento: **{formulario_escolhido}** | Técnico da Mensagem: **{st.session_state.get('tec_msg', 'N/D')}**")
 
-    # --- FORMULÁRIO 1: ASSERTEC ---
-    if formulario_escolhido == "Assertec / Fibrawer":
-        st.subheader("📋 Preenchimento - Assertec")
+        st.subheader(f"📋 Relatório de Conferência - {formulario_escolhido}")
         
-        cliente = st.text_input("Nome do cliente *", value=st.session_state.get("cli", ""))
-        protocolo = st.text_input("Protocolo *", value=st.session_state.get("proto", ""))
-        quantidade = st.text_input("Quantidade / Metragem / Km *", value=st.session_state.get("qtd", "0") if st.session_state.get("qtd", "").strip() else "0")
-        observacao = st.text_area("Observações Finais", value=st.session_state.get("obs", ""))
-
-        cidade_importada = st.session_state.get("cidade", "")
-        cidade_idx = 0
-        for idx, c in enumerate(lista_cidades_assertec):
-            if c.lower() in cidade_importada.lower() and cidade_importada.strip():
-                cidade_idx = idx
-                break
-
-        cidade = st.selectbox("Cidade *", lista_cidades_assertec, index=cidade_idx)
-
-        servico_importado = st.session_state.get("servico", "")
-        servico_idx = 0
-        serv_imp_clean = servico_importado.strip().lower()
-        if serv_imp_clean:
-            for idx, s in enumerate(lista_servicos_assertec_global):
-                if s.strip().lower() == serv_imp_clean:
-                    servico_idx = idx
-                    break
-            if servico_idx == 0:
-                for idx, s in enumerate(lista_servicos_assertec_global):
-                    if serv_imp_clean in s.strip().lower() or s.strip().lower() in serv_imp_clean:
-                        servico_idx = idx
-                        break
-
-        servico = st.selectbox("Tipo de serviço *", lista_servicos_assertec_global, index=servico_idx)
-
-        lista_tecnicos_assertec = ["Escolher...", "Anderson", "Wiliam", "Marcio", "Peter"]
-        tec_importado = st.session_state.get("tec", "")
-        tec_idx = lista_tecnicos_assertec.index(tec_importado) if tec_importado in lista_tecnicos_assertec else 0
-        tecnico = st.selectbox("Técnico responsável *", lista_tecnicos_assertec, index=tec_idx)
-
-    # --- FORMULÁRIO 2: BRASIL TECPAR / AMIGO ---
-    elif formulario_escolhido == "Brasil TecPar / Amigo":
-        st.subheader("📋 Preenchimento - Brasil TecPar / Amigo")
+        # Apresentação limpa e detalhada dos dados extraídos para consulta
+        col_d1, col_d2 = st.columns(2)
+        with col_d1:
+            st.markdown(f"**Cliente:** {st.session_state.get('cli', 'N/D')}")
+            st.markdown(f"**Protocolo:** {st.session_state.get('proto', 'N/D')}")
+            st.markdown(f"**Cidade:** {st.session_state.get('cidade', 'N/D')}")
+        with col_d2:
+            st.markdown(f"**Serviço:** {st.session_state.get('servico', 'N/D')}")
+            st.markdown(f"**Técnico:** {st.session_state.get('tec', 'N/D')}")
+            st.markdown(f"**Quantidade / Metragem:** {st.session_state.get('qtd', '0')}")
         
-        lista_tecnicos_amigo = [
-            "Escolher...", "MICHAEL DOUGLAS PANZENHAGEN", "JONAS SCHUTZ", "CASSIANO PALAVRO", 
-            "MAURICIO JONATAN DA CRUZ", "ANDERSON WOLFART MOLLERKE", "SAMUEL SCHNEIDER SCHOMMER", "HERIVELTON SILVEIRA NERY"
-        ]
-        tec_importado = st.session_state.get("tec", "")
-        tec_idx_amigo = 0
-        for idx, t in enumerate(lista_tecnicos_amigo):
-            if t.lower() in tec_importado.lower() and tec_importado.strip():
-                tec_idx_amigo = idx
-                break
-        tecnico_amigo = st.selectbox("Nome do Técnico / Assistente *", lista_tecnicos_amigo, index=tec_idx_amigo)
-
-        cidade_importada = st.session_state.get("cidade", "")
-        cidade_idx_amigo = 0
-        for idx, c in enumerate(lista_cidades_amigo):
-            if c.lower() in cidade_importada.lower() and cidade_importada.strip():
-                cidade_idx_amigo = idx
-                break
-        cidade_amigo = st.selectbox("Cidade *", lista_cidades_amigo, index=cidade_idx_amigo)
-
-        servico_importado = st.session_state.get("servico", "")
-        servico_idx_amigo = 0
-        serv_imp_clean_amigo = servico_importado.strip().lower()
-        if serv_imp_clean_amigo:
-            for idx, s in enumerate(lista_servicos_amigo_global):
-                if s.strip().lower() == serv_imp_clean_amigo:
-                    servico_idx_amigo = idx
-                    break
-            if servico_idx_amigo == 0:
-                for idx, s in enumerate(lista_servicos_amigo_global):
-                    if serv_imp_clean_amigo in s.strip().lower():
-                        servico_idx_amigo = idx
-                        break
-
-        servico_amigo = st.selectbox("Serviço Realizado *", lista_servicos_amigo_global, index=servico_idx_amigo)
-
-        cliente = st.text_input("Nome do cliente *", value=st.session_state.get("cli", ""))
-        protocolo = st.text_input("Protocolo *", value=st.session_state.get("proto", ""))
-        quantidade_cabo = st.text_input("Quantidade de cabo utilizado (Metragem) *", value=st.session_state.get("qtd", "0") if st.session_state.get("qtd", "").strip() else "0")
-        observacao = st.text_area("Observações Técnicas", value=st.session_state.get("obs", ""))
-
+        st.markdown(f"**Observações Finais:** {st.session_state.get('obs', 'Nenhuma observação.')}")
+    else:
+        st.info("ℹ️ Cole e processe uma mensagem do WhatsApp na caixa acima para visualizar o relatório de conferência.")
 
 # ==========================================
-# ABA 2: GERADOR DE MENSAGENS (Para o Telemóvel)
+# ABA 2: GERADOR DE MENSAGENS (Telemóvel)
 # ==========================================
 with aba_gerador:
-    st.subheader("📱 Gerador de Mensagem Padronizada para WhatsApp")
-    st.markdown("Preencha os campos abaixo no telemóvel para gerar a mensagem com o padrão correto para envio.")
+    # CSS para forçar a cor vermelha nas bordas dos inputs e selects críticos
+    st.markdown("""
+        <style>
+        input[aria-label*="*"], select[aria-label*="*"], div[data-baseweb="select"] > div:has(~ input[aria-label*="*"]) {
+            border: 2px solid #ff4b4b !important;
+            background-color: rgba(255, 75, 75, 0.03) !important;
+        }
+        label:has(span:contains("*")), p:has(span:contains("*")) {
+            color: #d32f2f !important;
+            font-weight: 700 !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
-    # 1. Seleção da Empresa
+    st.subheader("📱 Gerador de Mensagem Padronizada para WhatsApp")
+    st.markdown("Preencha os campos abaixo para gerar a mensagem com o padrão correto para envio.")
+
     empresa_gen = st.selectbox("Empresa / Tipo", ["ASSERTEC", "AMIGO"], key="gen_empresa")
 
-    # 2. Seleção do Técnico (Menu suspenso com ANDERSON e MARCIO)
-    tecnico_gen = st.selectbox("Técnico Responsável", ["ANDERSON", "MARCIO"], key="gen_tecnico")
-    
-    # Define o nome detalhado automaticamente com base na escolha do técnico
-    if tecnico_gen == "ANDERSON":
-        nome_tec_completo = "Anderson"
+    # Mensagem de alerta colocada acima do campo de técnico responsável
+    if empresa_gen == "ASSERTEC":
+        st.error("🚨 **Atenção: Preencha os campos obrigatórios em destaque vermelho abaixo (Assertec).**")
     else:
-        nome_tec_completo = "Márcio"
+        st.error("🚨 **Atenção: Preencha os campos obrigatórios em destaque vermelho abaixo (Amigo).**")
 
-    # 3. Listas dinâmicas com base na Empresa escolhida
+    # Regras de Técnico por Empresa
+    if empresa_gen == "AMIGO":
+        tecnico_selecionado = st.selectbox("Técnico Responsável *", ["ANDERSON", "MARCIO"], key="gen_tecnico_amigo")
+        if tecnico_selecionado == "ANDERSON":
+            tecnico_gen = "ANDERSON"
+        else:
+            tecnico_gen = "MARCIO"
+        nome_tec_completo = "ANDERSON WOLFART MOLLERKE"
+    else:
+        tecnico_selecionado = st.selectbox("Técnico Responsável *", ["ANDERSON", "MARCIO"], key="gen_tecnico")
+        if tecnico_selecionado == "ANDERSON":
+            tecnico_gen = "ANDERSON"
+            nome_tec_completo = "Anderson"
+        else:
+            tecnico_gen = "MARCIO"
+            nome_tec_completo = "Márcio"
+
     if empresa_gen == "ASSERTEC":
         cidades_disponiveis = lista_cidades_assertec
         servicos_disponiveis = lista_servicos_assertec_global
@@ -882,32 +798,55 @@ with aba_gerador:
         cidades_disponiveis = lista_cidades_amigo
         servicos_disponiveis = lista_servicos_amigo_global
 
-    cliente_gen = st.text_input("Nome do Cliente", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="gen_cliente")
-    protocolo_gen = st.text_input("Número do Protocolo", placeholder="EX: 114619", key="gen_protocolo")
-    
-    # Seletores de Cidade e Serviço vindos direto das listas oficiais
-    cidade_gen = st.selectbox("Cidade", cidades_disponiveis, key="gen_cidade")
-    servico_gen = st.selectbox("Serviço Realizado", servicos_disponiveis, key="gen_servico")
-    
-    obs_gen = st.text_area("Observações", placeholder="EX: Refeita configurações nos equipamentos...", key="gen_obs")
+    # Campos do formulário (com Cidade marcada com * também na Assertec)
+    if empresa_gen == "ASSERTEC":
+        cliente_gen = st.text_input("Nome do Cliente *", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="gen_cliente")
+        protocolo_gen = st.text_input("Número do Protocolo *", placeholder="EX: 114619", key="gen_protocolo")
+        cidade_gen = st.selectbox("Cidade *", cidades_disponiveis, key="gen_cidade")
+        servico_gen = st.selectbox("Serviço Realizado *", servicos_disponiveis, key="gen_servico")
+        metragem_gen = st.number_input("Metragem / Quantidade", min_value=0, value=1, step=1, key="gen_metragem_assertec")
 
-    # Botão para gerar o texto final estruturado
+    else: # AMIGO
+        cliente_gen = st.text_input("Nome do Cliente *", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="gen_cliente")
+        protocolo_gen = st.text_input("Número do Protocolo *", placeholder="EX: 114619", key="gen_protocolo")
+        cidade_gen = st.selectbox("Cidade *", cidades_disponiveis, key="gen_cidade")
+        servico_gen = st.selectbox("Serviço Realizado *", servicos_disponiveis, key="gen_servico")
+        
+        lpu_gen = st.number_input("LPU", min_value=0, value=1, step=1, key="gen_lpu_amigo")
+        km_rodado_gen = 0
+        st.text_input("Quilômetro Rodado (Km)", value="0", disabled=True, key="gen_km_amigo_fixo")
+
+    st.markdown("---")
+    obs_gen = st.text_area("Observações (Opcional)", placeholder="EX: Refeita configurações nos equipamentos...", key="gen_obs")
+
     if st.button("✨ Gerar Mensagem Pronta"):
-        mensagem_gerada = f"""{empresa_gen}
+        if empresa_gen == "AMIGO":
+            mensagem_gerada = f"""{empresa_gen}
 {tecnico_gen}
 Técnico: {nome_tec_completo}
 Cliente: {cliente_gen.upper()}
 Protocolo: {protocolo_gen}
 Cidade: {cidade_gen}
 Serviço: {servico_gen}
+LPU: {lpu_gen if 'lpu_gen' in locals() else 1}
+Km Rodado: {km_rodado_gen}
 Obs: {obs_gen}"""
-
-        # Guarda na sessão para facilitar
+        else:
+            mensagem_gerada = f"""{empresa_gen}
+{tecnico_gen}
+Técnico: {nome_tec_completo}
+Cliente: {cliente_gen.upper()}
+Protocolo: {protocolo_gen}
+Cidade: {cidade_gen}
+Serviço: {servico_gen}
+Metragem: {metragem_gen}
+Obs: {obs_gen}"""
         st.session_state["mensagem_gerada_final"] = mensagem_gerada
 
-    # Se já foi gerada, exibe o bloco e a confirmação visual
     if "mensagem_gerada_final" in st.session_state and st.session_state["mensagem_gerada_final"]:
         st.markdown("### 📋 Mensagem Gerada:")
         st.code(st.session_state["mensagem_gerada_final"], language="text")
         
-        st.info("💡 **Como copiar no telemóvel:** Clica no **ícone de copiar** no canto superior direito da caixa cinza acima ou seleciona o texto para o copiar para o WhatsApp!")
+        mensagem_url = urllib.parse.quote(st.session_state["mensagem_gerada_final"])
+        link_whatsapp = f"https://wa.me/?text={mensagem_url}"
+        st.link_button("📲 Enviar diretamente para o WhatsApp", link_whatsapp)
