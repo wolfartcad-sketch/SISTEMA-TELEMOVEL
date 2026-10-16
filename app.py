@@ -134,20 +134,21 @@ lista_servicos_amigo_global = [
     "VISTORIA TÉCNICA / VIABILIDADE TÉCNICA"
 ]
 
-# --- CRIAÇÃO DAS ABAS PRINCIPAIS (Oculta Gestão no Cloud/Telemóvel) ---
+# --- CRIAÇÃO DAS ABAS PRINCIPAIS ---
 if IS_CLOUD:
-    # No telemóvel/nuvem, mostra apenas o Gerador de Mensagens diretamente
-    aba_gerador = st.container()
+    # No telemóvel/nuvem: cria apenas uma aba contendo diretamente o gerador
+    tabs = st.tabs(["📱 Gerador de Mensagens (Telemóvel)"])
+    aba_gerador = tabs[0]
     aba_gestao = None
 else:
-    # No PC local, mostra as duas abas completas
+    # No computador local: cria as duas abas normais
     aba_gestao, aba_gerador = st.tabs(["💻 Gestão & Computador (Checklists & Excel)", "📱 Gerador de Mensagens (Telemóvel)"])
 
 # ==========================================
 # ABA 1: GESTÃO & COMPUTADOR
 # ==========================================
-with aba_gestao:
-    st.subheader("🤖 Importação Automática por Mensagem do WhatsApp")
+if aba_gestao is not None:
+    with aba_gestao:
 
     def limpar_campo():
         st.session_state["msg_input"] = ""
