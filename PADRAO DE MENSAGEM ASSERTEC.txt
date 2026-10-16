@@ -1,0 +1,7 @@
+ASSERTEC
+Técnico: Anderson
+Cliente: Nome do Cliente
+Protocolo: 123456
+Cidade: São Sebastião do Caí
+Serviço: Atendimento Presencial - REPARO
+Obs: Cabo partido perto da caixa

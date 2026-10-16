@@ -1,0 +1,10 @@
+Amigo
+Técnico: Anderson Wolfart Mollerke
+Protocolo: 21251502
+Mercado: AMIGO - VAREJO
+Cliente: MARLUCE STEFFENS FERREIRA
+Cidade: Ivoti
+Km: 0
+Serviço: BATIMENTO DE CAIXA 1X8 PORTAS
+LPU: 1
+Obs: BATIDO CTO 24

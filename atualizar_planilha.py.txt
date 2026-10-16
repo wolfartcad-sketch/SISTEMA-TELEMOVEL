@@ -1,0 +1,66 @@
+import openpyxl
+from datetime import datetime
+import os
+
+def adicionar_atendimento_excel(
+    caminho_arquivo, 
+    cliente, 
+    protocolo, 
+    servico, 
+    cidade, 
+    metragem, 
+    equipamento=""
+):
+    """
+    Adiciona uma nova linha de atendimento na planilha do técnico,
+    respeitando o padrão de colunas (A a H).
+    """
+    if not os.path.exists(caminho_arquivo):
+        print(f"Erro: O ficheiro '{caminho_arquivo}' não foi encontrado.")
+        return False
+
+    # Abre a workbook do Excel mantendo as fórmulas ativas
+    wb = openpyxl.load_workbook(caminho_arquivo)
+    
+    # Seleciona a aba ativa (ou podes colocar o nome exato da aba, ex: wb['Plan1'])
+    ws = wb.active 
+
+    # Encontra a primeira linha vazia a partir da linha 2 (ignorando o cabeçalho)
+    proxima_linha = ws.max_row + 1
+    for row in range(2, ws.max_row + 2):
+        if ws.cell(row=row, column=2).value is None: # Verifica se o campo 'Cliente' está vazio
+            proxima_linha = row
+            break
+
+    # Data atual formatada (ex: 15/10/2026)
+    data_atual = datetime.now().strftime("%d/%m/%Y")
+
+    # Preenche os dados nas respetivas colunas
+    ws.cell(row=proxima_linha, column=1, value=data_atual)      # A: Data
+    ws.cell(row=proxima_linha, column=2, value=cliente)         # B: Cliente
+    ws.cell(row=proxima_linha, column=3, value=protocolo)       # C: Protocolo
+    ws.cell(row=proxima_linha, column=4, value=servico)         # D: Serviço
+    ws.cell(row=proxima_linha, column=5, value=cidade)          # E: Cidade
+    ws.cell(row=proxima_linha, column=6, value=metragem)        # F: Metragem
+    # A Coluna G (Valor) já tem a fórmula do Excel, por isso não mexemos nela
+    ws.cell(row=proxima_linha, column=8, value=equipamento)     # H: Equipamento
+
+    # Guarda as alterações no ficheiro Excel
+    wb.save(caminho_arquivo)
+    print(f"Sucesso! Atendimento de {cliente} adicionado na linha {proxima_linha}.")
+    return True
+
+# --- Exemplo de teste isolado ---
+if __name__ == "__main__":
+    # Substitui pelo caminho exato onde tens a tua planilha no OneDrive/computador
+    caminho_excel = "C:/Users/seu_usuario/OneDrive/Área de Trabalho/sistema/SERVIÇOS MARCIO AMIGO.xlsx"
+    
+    adicionar_atendimento_excel(
+        caminho_excel, 
+        cliente="CLIENTE TESTE PYTHON", 
+        protocolo="99988877", 
+        servico="INSTALAÇÃO", 
+        cidade="IVOTI", 
+        metragem="100", 
+        equipamento="HUAWEI X8"
+    )
