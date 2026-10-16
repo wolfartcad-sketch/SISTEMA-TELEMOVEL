@@ -148,7 +148,7 @@ else:
 if not IS_CLOUD:
 
 
-                            def limpar_campo():
+    def limpar_campo():
         st.session_state["msg_input"] = ""
         st.session_state["mensagem_processada"] = False
         st.session_state["tec_msg"] = ""
