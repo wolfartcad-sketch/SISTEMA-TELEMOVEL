@@ -20,23 +20,16 @@ else:
 # Configuração de página alterada para centrado e com limite elegante
 st.set_page_config(page_title="Sistema de Atendimento - Assertec", layout="centered")
 
-# CSS personalizado otimizado para telemóveis e computadores
+# CSS personalizado otimizado com margem superior adequada para não cortar nada
 st.markdown(
     """
     <style>
-    /* Compacta o topo do ecrã e reduz margens */
     .block-container {
         max-width: 900px;
-        padding-top: 0.5rem !important;
+        padding-top: 1.5rem !important;
         padding-bottom: 1rem !important;
         padding-left: 1rem !important;
         padding-right: 1rem !important;
-    }
-    /* Reduz a margem dos títulos para subir os campos */
-    h1 {
-        font-size: 1.6rem !important;
-        margin-bottom: 0.2rem !important;
-        padding-top: 0rem !important;
     }
     h2, h3 {
         font-size: 1.2rem !important;
@@ -48,7 +41,16 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.title("FibraWer ⚡")
+# Cabeçalho unificado com margem superior segura para evitar qualquer corte visual
+st.markdown(
+    """
+    <div style="margin-top: 10px; margin-bottom: 15px;">
+        <h1 style="font-size: 2.2rem !important; font-weight: 700 !important; color: #262730; margin: 0; padding: 0; line-height: 1.2;">FibraWer ⚡</h1>
+        <p style="font-size: 8pt !important; color: #666666; margin: 4px 0 0 0; padding: 0;">Desenvolvido por Anderson Wolfart Möllerke</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # --- LISTAS OFICIAIS DE APOIO ---
 lista_cidades_assertec = [
