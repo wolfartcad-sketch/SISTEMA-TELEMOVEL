@@ -20,16 +20,28 @@ else:
 # Configuração de página alterada para centrado e com limite elegante
 st.set_page_config(page_title="Sistema de Atendimento - Assertec", layout="centered")
 
-# CSS personalizado para limitar a largura máxima do container ao tamanho do título
+# CSS personalizado otimizado para telemóveis e computadores
 st.markdown(
     """
     <style>
+    /* Compacta o topo do ecrã e reduz margens */
     .block-container {
         max-width: 900px;
-        padding-top: 2rem;
-        padding-right: 2rem;
-        padding-left: 2rem;
-        padding-bottom: 2rem;
+        padding-top: 0.5rem !important;
+        padding-bottom: 1rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+    /* Reduz a margem dos títulos para subir os campos */
+    h1 {
+        font-size: 1.6rem !important;
+        margin-bottom: 0.2rem !important;
+        padding-top: 0rem !important;
+    }
+    h2, h3 {
+        font-size: 1.2rem !important;
+        margin-top: 0.2rem !important;
+        margin-bottom: 0.2rem !important;
     }
     </style>
     """,
@@ -218,7 +230,6 @@ if aba_gestao is not None:
             s = servico_wpp.upper()
             cidade_limpa = str(cidade_atendimento).strip().lower()
             
-            # Lista das tuas cidades principais (comparações em minúsculas)
             cidades_principais = [
                 "ivoti", 
                 "são josé do hortêncio", 
@@ -229,13 +240,8 @@ if aba_gestao is not None:
                 "presidente lucena"
             ]
             
-            # Verifica se a cidade é de fora da base
             cidade_fora_da_base = cidade_limpa and cidade_limpa not in cidades_principais
-            
-            # Verifica se é um serviço de plantão específico considerado fora da base
             eh_plantao_fb = "PLANTAO" in s and ("REPARO" in s)
-            
-            # Define se precisa do sufixo FB no final
             sufixo_fb = " FB" if (cidade_fora_da_base or eh_plantao_fb) else ""
 
             try:
@@ -769,7 +775,6 @@ if aba_gestao is not None:
         else:
             st.info("ℹ️ Cole e processe uma mensagem do WhatsApp na caixa acima para visualizar o relatório de conferência.")
 
-# ==========================================
 # ==========================================
 # ABA 2: GERADOR DE MENSAGENS (Telemóvel)
 # ==========================================
