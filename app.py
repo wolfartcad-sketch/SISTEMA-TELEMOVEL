@@ -48,7 +48,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.title("Sistema Automação Integrada FibraWer ⚡")
+st.title("FibraWer ⚡")
 
 # --- LISTAS OFICIAIS DE APOIO ---
 lista_cidades_assertec = [
