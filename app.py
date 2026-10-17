@@ -20,7 +20,7 @@ else:
 # Configuração de página alterada para centrado e com limite elegante
 st.set_page_config(page_title="Sistema de Atendimento - Assertec", layout="centered")
 
-# CSS personalizado otimizado com margem superior adequada para não cortar nada
+# CSS base global otimizado
 st.markdown(
     """
     <style>
@@ -781,65 +781,67 @@ if aba_gestao is not None:
 # ABA 2: GERADOR DE MENSAGENS (Telemóvel)
 # ==========================================
 with aba_gerador:
-    st.markdown("""
-        <style>
-        input[aria-label*="*"], select[aria-label*="*"], div[data-baseweb="select"] > div:has(~ input[aria-label*="*"]) {
-            border: 2px solid #ff4b4b !important;
-            background-color: rgba(255, 75, 75, 0.03) !important;
-        }
-        label:has(span:contains("*")), p:has(span:contains("*")) {
-            color: #d32f2f !important;
-            font-weight: 700 !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
     st.subheader("📱 Gerador de Mensagem Padronizada para WhatsApp")
     st.markdown("Selecione a empresa e preencha todos os campos obrigatórios para liberar a geração da mensagem.")
 
+    # Função auxiliar para criar caixas visuais com borda reativa perfeita para selectbox
+    def selectbox_com_borda_reativa(rotulo, opcoes, valor_atual, chave):
+        valido = valor_atual != "Escolher..."
+        cor = "#2e7d32" if valido else "#ff4b4b"
+        bg = "rgba(46, 125, 50, 0.03)" if valido else "rgba(255, 75, 75, 0.03)"
+        
+        st.markdown(f"""
+            <div style="border: 2px solid {cor}; background-color: {bg}; border-radius: 6px; padding: 6px 10px 4px 10px; margin-bottom: 12px;">
+                <span style="font-size: 13px; font-weight: 700; color: {cor};">{rotulo}</span>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        return st.selectbox(rotulo, opcoes, key=chave, label_visibility="collapsed")
+
     # Empresa inicia em "Escolher..."
     opcoes_empresa = ["Escolher...", "ASSERTEC", "AMIGO"]
-    empresa_gen = st.selectbox("Empresa / Tipo *", opcoes_empresa, key="gen_empresa")
+    empresa_gen = selectbox_com_borda_reativa("Empresa / Tipo *", opcoes_empresa, st.session_state.get("gen_empresa", "Escolher..."), "gen_empresa")
 
     # Variáveis de controlo para validação
     campos_preenchidos = False
 
     if empresa_gen != "Escolher...":
         if empresa_gen == "ASSERTEC":
-            st.error("🚨 **Atenção: Preencha todos os campos obrigatórios em destaque vermelho abaixo.**")
+            st.error("🚨 **Atenção: Preencha todos os campos obrigatórios em destaque abaixo.**")
             
             tec_opcoes = ["Escolher...", "ANDERSON", "MARCIO"]
-            tecnico_selecionado = st.selectbox("Técnico Responsável *", tec_opcoes, key="gen_tecnico_assertec")
+            tecnico_selecionado = selectbox_com_borda_reativa("Técnico Responsável *", tec_opcoes, st.session_state.get("gen_tecnico_assertec", "Escolher..."), "gen_tecnico_assertec")
             
             cidades_opcoes = ["Escolher..."] + lista_cidades_assertec
-            cidade_gen = st.selectbox("Cidade *", cidades_opcoes, key="gen_cidade_assertec")
+            cidade_gen = selectbox_com_borda_reativa("Cidade *", cidades_opcoes, st.session_state.get("gen_cidade_assertec", "Escolher..."), "gen_cidade_assertec")
             
-            servicos_opcoes = lista_servicos_assertec_global # Já tem "Escolher..." no topo
-            servico_gen = st.selectbox("Serviço Realizado *", servicos_opcoes, key="gen_servico_assertec")
+            servicos_opcoes = lista_servicos_assertec_global 
+            servico_gen = selectbox_com_borda_reativa("Serviço Realizado *", servicos_opcoes, st.session_state.get("gen_servico_assertec", "Escolher..."), "gen_servico_assertec")
             
             cliente_gen = st.text_input("Nome do Cliente *", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="gen_cliente_assertec")
             protocolo_gen = st.text_input("Número do Protocolo *", placeholder="EX: 114619", key="gen_protocolo_assertec")
             metragem_gen = st.number_input("Metragem / Quantidade", min_value=0, value=1, step=1, key="gen_metragem_assertec")
             
-            # Validação para Assertec
-            if (tecnico_selecionado != "Escolher..." and 
-                cidade_gen != "Escolher..." and 
-                servico_gen != "Escolher..." and 
-                cliente_gen.strip() != "" and 
-                protocolo_gen.strip() != ""):
+            t_ok = tecnico_selecionado != "Escolher..."
+            c_ok = cidade_gen != "Escolher..."
+            s_ok = servico_gen != "Escolher..."
+            cli_ok = cliente_gen.strip() != "" and cliente_gen.strip() != "EX: ELISETE ANTONIA DOS SANTOS"
+            p_ok = protocolo_gen.strip() != "" and protocolo_gen.strip() != "EX: 114619"
+            
+            if t_ok and c_ok and s_ok and cli_ok and p_ok:
                 campos_preenchidos = True
 
         else: # AMIGO
-            st.error("🚨 **Atenção: Preencha todos os campos obrigatórios em destaque vermelho abaixo.**")
+            st.error("🚨 **Atenção: Preencha todos os campos obrigatórios em destaque abaixo.**")
             
             tec_opcoes = ["Escolher...", "ANDERSON", "MARCIO"]
-            tecnico_selecionado = st.selectbox("Técnico Responsável *", tec_opcoes, key="gen_tecnico_amigo")
+            tecnico_selecionado = selectbox_com_borda_reativa("Técnico Responsável *", tec_opcoes, st.session_state.get("gen_tecnico_amigo", "Escolher..."), "gen_tecnico_amigo")
             
             cidades_opcoes = ["Escolher..."] + lista_cidades_amigo
-            cidade_gen = st.selectbox("Cidade *", cidades_opcoes, key="gen_cidade_amigo")
+            cidade_gen = selectbox_com_borda_reativa("Cidade *", cidades_opcoes, st.session_state.get("gen_cidade_amigo", "Escolher..."), "gen_cidade_amigo")
             
-            servicos_opcoes = lista_servicos_amigo_global # Já tem "Escolher..." no topo
-            servico_gen = st.selectbox("Serviço Realizado *", servicos_opcoes, key="gen_servico_amigo")
+            servicos_opcoes = lista_servicos_amigo_global 
+            servico_gen = selectbox_com_borda_reativa("Serviço Realizado *", servicos_opcoes, st.session_state.get("gen_servico_amigo", "Escolher..."), "gen_servico_amigo")
             
             cliente_gen = st.text_input("Nome do Cliente *", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="gen_cliente_amigo")
             protocolo_gen = st.text_input("Número do Protocolo *", placeholder="EX: 114619", key="gen_protocolo_amigo")
@@ -849,13 +851,39 @@ with aba_gerador:
             km_rodado_gen = 0
             st.text_input("Quilômetro Rodado (Km)", value="0", disabled=True, key="gen_km_amigo_fixo")
             
-            # Validação para Amigo
-            if (tecnico_selecionado != "Escolher..." and 
-                cidade_gen != "Escolher..." and 
-                servico_gen != "Escolher..." and 
-                cliente_gen.strip() != "" and 
-                protocolo_gen.strip() != ""):
+            t_ok = tecnico_selecionado != "Escolher..."
+            c_ok = cidade_gen != "Escolher..."
+            s_ok = servico_gen != "Escolher..."
+            cli_ok = cliente_gen.strip() != "" and cliente_gen.strip() != "EX: ELISETE ANTONIA DOS SANTOS"
+            p_ok = protocolo_gen.strip() != "" and protocolo_gen.strip() != "EX: 114619"
+            
+            if t_ok and c_ok and s_ok and cli_ok and p_ok:
                 campos_preenchidos = True
+    else:
+        t_ok = False
+        c_ok = False
+        s_ok = False
+        cli_ok = False
+        p_ok = False
+
+    # Validação visual CSS para os campos de texto
+    if empresa_gen != "Escolher...":
+        cli_valido = cliente_gen.strip() != "" and cliente_gen.strip() != "EX: ELISETE ANTONIA DOS SANTOS"
+        proto_valido = protocolo_gen.strip() != "" and protocolo_gen.strip() != "EX: 114619"
+        
+        col_cli = "#2e7d32" if cli_valido else "#ff4b4b"
+        col_proto = "#2e7d32" if proto_valido else "#ff4b4b"
+
+        st.markdown(f"""
+            <style>
+            input[aria-label="Nome do Cliente *"] {{
+                border: 2px solid {col_cli} !important;
+            }}
+            input[aria-label="Número do Protocolo *"] {{
+                border: 2px solid {col_proto} !important;
+            }}
+            </style>
+        """, unsafe_allow_html=True)
 
         st.markdown("---")
         obs_gen = st.text_area("Observações (Opcional)", placeholder="EX: Refeita configurações nos equipamentos...", key="gen_obs")
@@ -895,7 +923,7 @@ Metragem: {metragem_gen}
 Obs: {obs_gen}"""
                 st.session_state["mensagem_gerada_final"] = mensagem_gerada
         else:
-            st.warning("⚠️ Por favor, preencha todos os campos obrigatórios destacados em vermelho para liberar a geração da mensagem.")
+            st.warning("⚠️ Por favor, preencha todos os campos obrigatórios destacados para liberar a geração da mensagem.")
 
     if "mensagem_gerada_final" in st.session_state and st.session_state["mensagem_gerada_final"]:
         st.markdown("### 📋 Mensagem Gerada:")
