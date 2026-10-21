@@ -59,6 +59,64 @@ lista_cidades_assertec = [
     "São Sebastião do Caí", "São Vendelino", "Tupandi", "Vale Real"
 ]
 
+lista_cidades_amigo_gerador = [
+    "Alto Feliz", "Bom Principio", "Caxias do Sul", "Feliz", "Harmonia", "Ivoti", 
+    "Linha Nova", "Pareci Novo", "Presidente Lucena", "São José do Hortêncio", 
+    "São Sebastião do Caí", "São Vendelino", "Tupandi", "Vale Real"
+]
+
+lista_cidades_amigo_forms = [
+    "Escolher",
+    "ALEGRETE",
+    "BENTO GONÇALVES",
+    "CACEQUI",
+    "CAMPO BOM",
+    "CANOAS",
+    "CARLOS BARBOSA",
+    "DOM PEDRITO",
+    "ESTRELA",
+    "FARROUPILHA",
+    "FELIZ",
+    "GARIBALDI",
+    "GRAVATAÍ",
+    "IGREJINHA",
+    "ITAARA",
+    "ITAQUI",
+    "JOENVILE",
+    "JOIA",
+    "LAJEADO",
+    "MATA",
+    "NOVA HARTZ",
+    "NOVA PETRÓPOLIS",
+    "NOVA PRATA",
+    "NOVO HAMBURGO",
+    "PAROBÉ",
+    "PORTO ALEGRE",
+    "SALVADOR DO SUL",
+    "SANTA CRUZ DO SUL",
+    "SANTA MARIA",
+    "SANTANA DO LIVRAMENTO",
+    "SANTIAGO",
+    "SÃO BORJA",
+    "SÃO FRANCISCO DE PAULA",
+    "SÃO LEOPOLDO",
+    "ALTO FELIZ",
+    "LINHA NOVA",
+    "SÃO JOSÉ DO HORTÊNCIO",
+    "IVOTI",
+    "VALE REAL",
+    "PRESIDENTE LUCENA",
+    "SÃO PEDRO DO SUL",
+    "SÃO SEBASTIÃO DO CAÍ",
+    "SAPIRANGA",
+    "TAQUARA",
+    "TEUTÔNIA",
+    "TRÊS COROAS",
+    "URUGUAIANA",
+    "VENÂNCIO AIRES",
+    "VILA FLORES"
+]
+
 lista_servicos_assertec_global = [
     "Escolher...",
     "Atendimento Presencial - REPARO",
@@ -115,13 +173,6 @@ lista_servicos_assertec_global = [
     "CORPORATIVO - VISTORIA TÉCNICA / VIABILIDADE TÉCNICA"
 ]
 
-lista_cidades_amigo = [
-    "Escolher...", 
-    "Alto Feliz", "Bom Principio", "Caxias do Sul", "Feliz", "Harmonia", "Ivoti", 
-    "Linha Nova", "Pareci Novo", "Presidente Lucena", "São José do Hortêncio", 
-    "São Sebastião do Caí", "São Vendelino", "Tupandi", "Vale Real"
-]
-
 lista_servicos_amigo_global = [
     "Escolher...", 
     "ATENDIMENTO PRESENCIAL - RNC", 
@@ -167,6 +218,44 @@ if aba_gestao is not None:
             st.session_state["qtd"] = ""
             st.session_state["obs"] = ""
 
+        def extrair(padrao, texto):
+            match = re.search(padrao, texto, re.IGNORECASE)
+            if match:
+                for val in match.groups():
+                    if val is not None and val.strip():
+                        return val.strip()
+            return ""
+
+        def processar_texto_atual(texto):
+            linhas = [l.strip() for l in texto.strip().split("\n") if l.strip()]
+            primeiro_texto = linhas[0].lower() if len(linhas) > 0 else ""
+            if "amigo" in primeiro_texto or "tecpar" in primeiro_texto:
+                st.session_state["formulario_escolhido"] = "Brasil TecPar / Amigo"
+            else:
+                st.session_state["formulario_escolhido"] = "Assertec / Fibrawer"
+
+            if len(linhas) > 1:
+                st.session_state["tec_msg"] = linhas[1].upper()
+            else:
+                st.session_state["tec_msg"] = ""
+
+            st.session_state["tec"] = extrair(r"Técnico:\s*(.*)", texto)
+            st.session_state["cli"] = extrair(r"Cliente:\s*(.*)", texto)
+            st.session_state["proto"] = extrair(r"Protocolo:\s*(.*)", texto)
+            st.session_state["cidade"] = extrair(r"Cidade:\s*(.*)", texto)
+            
+            raw_servico = extrair(r"Serviço:\s*(.*)", texto)
+            raw_servico = re.sub(r'ATATIVAÇÃO', 'ATIVAÇÃO', raw_servico, flags=re.IGNORECASE)
+            st.session_state["servico"] = raw_servico
+            
+            qtd_extraida = extrair(r"Metragem[:]?\s*(.*)|Cabo[:]?\s*(.*)|Qtd[:]?\s*(.*)|Quantidade[:]?\s*(.*)", texto)
+            if not qtd_extraida:
+                qtd_extraida = extrair(r"LPU[:]?\s*(.*)", texto)
+            st.session_state["qtd"] = qtd_extraida if qtd_extraida else "0"
+            
+            st.session_state["obs"] = extrair(r"Obs:\s*(.*)|Observação:\s*(.*)", texto)
+            st.session_state["mensagem_processada"] = True
+
         if "mensagem_processada" not in st.session_state:
             st.session_state["mensagem_processada"] = False
 
@@ -175,6 +264,10 @@ if aba_gestao is not None:
             height=280, 
             key="msg_input"
         )
+
+        # Sempre sincroniza os dados se houver texto válido na caixa
+        if msg_texto.strip():
+            processar_texto_atual(msg_texto)
 
         if "formulario_escolhido" not in st.session_state:
             st.session_state["formulario_escolhido"] = "Assertec / Fibrawer"
@@ -191,41 +284,7 @@ if aba_gestao is not None:
             if not msg_texto.strip():
                 st.error("Cole uma mensagem válida.")
             else:
-                linhas = [l.strip() for l in msg_texto.strip().split("\n") if l.strip()]
-                
-                primeiro_texto = linhas[0].lower() if len(linhas) > 0 else ""
-                if "amigo" in primeiro_texto or "tecpar" in primeiro_texto:
-                    st.session_state["formulario_escolhido"] = "Brasil TecPar / Amigo"
-                else:
-                    st.session_state["formulario_escolhido"] = "Assertec / Fibrawer"
-
-                if len(linhas) > 1:
-                    st.session_state["tec_msg"] = linhas[1].upper()
-                else:
-                    st.session_state["tec_msg"] = ""
-
-                def extrair(padrao, texto):
-                    match = re.search(padrao, texto, re.IGNORECASE)
-                    if match:
-                        for val in match.groups():
-                            if val is not None and val.strip():
-                                return val.strip()
-                    return ""
-                
-                st.session_state["tec"] = extrair(r"Técnico:\s*(.*)", msg_texto)
-                st.session_state["cli"] = extrair(r"Cliente:\s*(.*)", msg_texto)
-                st.session_state["proto"] = extrair(r"Protocolo:\s*(.*)", msg_texto)
-                st.session_state["cidade"] = extrair(r"Cidade:\s*(.*)", msg_texto)
-                
-                raw_servico = extrair(r"Serviço:\s*(.*)", msg_texto)
-                raw_servico = re.sub(r'ATATIVAÇÃO', 'ATIVAÇÃO', raw_servico, flags=re.IGNORECASE)
-                st.session_state["servico"] = raw_servico
-                
-                qtd_extraida = extrair(r"Cabo[:]?\s*(.*)|Metragem[:]?\s*(.*)|Qtd[:]?\s*(.*)|Quantidade[:]?\s*(.*)|LPU[:]?\s*(.*)", msg_texto)
-                st.session_state["qtd"] = qtd_extraida if qtd_extraida else "0"
-                
-                st.session_state["obs"] = extrair(r"Obs:\s*(.*)|Observação:\s*(.*)", msg_texto)
-                st.session_state["mensagem_processada"] = True
+                processar_texto_atual(msg_texto)
                 st.success(f"Mensagem processada! Formulário: **{st.session_state['formulario_escolhido']}** | Técnico Identificado: **{st.session_state['tec_msg']}**")
 
         def traduzir_para_excel(servico_wpp, metragem_str, cidade_atendimento):
@@ -251,26 +310,25 @@ if aba_gestao is not None:
             except:
                 m = 0
             
-            if "REPARO" in s:
+            # Verifica BATIDA ou BATIMENTO primeiro para nunca confundir com instalação
+            if "BATIDA" in s or "BATIMENTO" in s:
+                if "1/16" in s or "1X16" in s:
+                    return f"BATIDA DE CTO 1/16{sufixo_fb}"
+                return f"BATIDA DE CTO 1/8{sufixo_fb}"
+            elif "ROMPIMENTO" in s:
+                return f"ROMPIMENTO{sufixo_fb}"
+            elif "REPARO" in s or "MANUTENÇÃO" in s or "MANUTENCAO" in s or "RNC" in s:
                 return f"MANUTENÇAO{sufixo_fb}"
-            elif "ATIVAÇÃO" in s or "INSTALAÇÃO" in s or "INTERNET" in s:
-                if m > 300:
-                    return f"INSTALAÇAO MAIS DE 300M{sufixo_fb}"
-                return f"INSTALAÇAO{sufixo_fb}"
             elif "TROCA DE ENDEREÇO" in s:
                 if m > 300:
                     return f"TROCA DE ENDEREÇO MAIS DE 300M{sufixo_fb}"
                 return f"TROCA DE ENDEREÇO{sufixo_fb}"
-            elif "MANUTENÇÃO" in s or "MANUTENCAO" in s:
-                return f"MANUTENÇAO{sufixo_fb}"
-            elif "ROMPIMENTO" in s:
-                return f"ROMPIMENTO{sufixo_fb}"
             elif "IMPRODUTIVA" in s or "VISITA IMPRODUTIVA" in s:
                 return f"IMPRODUTIVA{sufixo_fb}"
-            elif "BATIDA" in s:
-                if "1/16" in s or "1X16" in s:
-                    return f"BATIDA DE CTO 1/16{sufixo_fb}"
-                return f"BATIDA DE CTO 1/8{sufixo_fb}"
+            elif "ATIVAÇÃO" in s or "INSTALAÇÃO" in s or "INTERNET" in s:
+                if m > 300:
+                    return f"INSTALAÇAO MAIS DE 300M{sufixo_fb}"
+                return f"INSTALAÇAO{sufixo_fb}"
             
             return f"INSTALAÇAO{sufixo_fb}"
 
@@ -489,11 +547,29 @@ if aba_gestao is not None:
                     quantidade_cabo_val = st.session_state.get("qtd", "") if st.session_state.get("qtd", "").strip() else "0"
                     observacao_val = st.session_state.get("obs", "")
                     
+                    mapa_cidades_equivalentes_amigo = {
+                        "bom principio": "SÃO SEBASTIÃO DO CAÍ",
+                        "bom princípio": "SÃO SEBASTIÃO DO CAÍ",
+                        "harmonia": "SÃO SEBASTIÃO DO CAÍ",
+                        "pareci novo": "SÃO SEBASTIÃO DO CAÍ",
+                        "tupandi": "SÃO SEBASTIÃO DO CAÍ",
+                        "são vendelino": "FELIZ",
+                        "sao vendelino": "FELIZ"
+                    }
+                    
+                    cidade_busca_amigo = cidade_importada_amigo.strip().lower()
+                    cidade_alvo_forms = mapa_cidades_equivalentes_amigo.get(cidade_busca_amigo, cidade_importada_amigo.strip())
+                    
                     cidade_idx_amigo = 0
-                    for idx, c in enumerate(lista_cidades_amigo):
-                        if c.lower() in cidade_importada_amigo.lower() and cidade_importada_amigo.strip():
+                    for idx, c in enumerate(lista_cidades_amigo_forms):
+                        if c.lower() == cidade_alvo_forms.lower() and cidade_alvo_forms:
                             cidade_idx_amigo = idx
                             break
+                    if cidade_idx_amigo == 0 and cidade_alvo_forms:
+                        for idx, c in enumerate(lista_cidades_amigo_forms):
+                            if c.lower() in cidade_alvo_forms.lower() or cidade_alvo_forms.lower() in c.lower():
+                                cidade_idx_amigo = idx
+                                break
                     
                     servico_idx_amigo = 0
                     serv_imp_clean_amigo = servico_importado_amigo.strip().lower()
@@ -688,7 +764,7 @@ if aba_gestao is not None:
                         }
                         sucesso, res = adicionar_ao_excel(caminho_excel, dados_registo)
                         if sucesso:
-                            st.success(f"✅ Atendimento de **{cli_v}** adicionado na linha **{res}** da planilha de **{tec_msg_atual}** (aba LANÇAMENTOS)!")
+                            st.success(f"✅ Atendimento de **{cli_v}** ({servico_convertido}) adicionado na linha **{res}** da planilha de **{tec_msg_atual}** (aba LANÇAMENTOS)!")
                         else:
                             st.error(f"Erro ao gravar no ficheiro de {tec_msg_atual}: {res}")
                         
@@ -784,25 +860,30 @@ with aba_gerador:
     st.subheader("📱 Gerador de Mensagem Padronizada para WhatsApp")
     st.markdown("Selecione a empresa e preencha todos os campos obrigatórios para liberar a geração da mensagem.")
 
-    # Função auxiliar para criar caixas visuais com borda reativa perfeita para selectbox
-    def selectbox_com_borda_reativa(rotulo, opcoes, valor_atual, chave):
-        valido = valor_atual != "Escolher..."
-        cor = "#2e7d32" if valido else "#ff4b4b"
-        bg = "rgba(46, 125, 50, 0.03)" if valido else "rgba(255, 75, 75, 0.03)"
+    def selectbox_com_borda_dinamica(label, opcoes, chave):
+        valor_atual = st.session_state.get(chave, "Escolher...")
+        esta_preenchido = valor_atual != "Escolher..."
         
+        cor_borda = "#2e7d32" if esta_preenchido else "#ff4b4b"
+        bg_cor = "rgba(46, 125, 50, 0.03)" if esta_preenchido else "rgba(255, 75, 75, 0.03)"
+
         st.markdown(f"""
-            <div style="border: 2px solid {cor}; background-color: {bg}; border-radius: 6px; padding: 6px 10px 4px 10px; margin-bottom: 12px;">
-                <span style="font-size: 13px; font-weight: 700; color: {cor};">{rotulo}</span>
+            <div style="
+                border: 2px solid {cor_borda};
+                background-color: {bg_cor};
+                border-radius: 6px;
+                padding: 4px 8px 0px 8px;
+                margin-bottom: 8px;
+            ">
+            <span style="font-size: 0.85rem; font-weight: 700; color: {cor_borda};">{label}</span>
             </div>
         """, unsafe_allow_html=True)
         
-        return st.selectbox(rotulo, opcoes, key=chave, label_visibility="collapsed")
+        return st.selectbox(label, opcoes, key=chave, label_visibility="collapsed")
 
-    # Empresa inicia em "Escolher..."
     opcoes_empresa = ["Escolher...", "ASSERTEC", "AMIGO"]
-    empresa_gen = selectbox_com_borda_reativa("Empresa / Tipo *", opcoes_empresa, st.session_state.get("gen_empresa", "Escolher..."), "gen_empresa")
+    empresa_gen = selectbox_com_borda_dinamica("Empresa / Tipo *", opcoes_empresa, "gen_empresa")
 
-    # Variáveis de controlo para validação
     campos_preenchidos = False
 
     if empresa_gen != "Escolher...":
@@ -810,13 +891,13 @@ with aba_gerador:
             st.error("🚨 **Atenção: Preencha todos os campos obrigatórios em destaque abaixo.**")
             
             tec_opcoes = ["Escolher...", "ANDERSON", "MARCIO"]
-            tecnico_selecionado = selectbox_com_borda_reativa("Técnico Responsável *", tec_opcoes, st.session_state.get("gen_tecnico_assertec", "Escolher..."), "gen_tecnico_assertec")
+            tecnico_selecionado = selectbox_com_borda_dinamica("Técnico Responsável *", tec_opcoes, "gen_tecnico_assertec")
             
             cidades_opcoes = ["Escolher..."] + lista_cidades_assertec
-            cidade_gen = selectbox_com_borda_reativa("Cidade *", cidades_opcoes, st.session_state.get("gen_cidade_assertec", "Escolher..."), "gen_cidade_assertec")
+            cidade_gen = selectbox_com_borda_dinamica("Cidade *", cidades_opcoes, "gen_cidade_assertec")
             
             servicos_opcoes = lista_servicos_assertec_global 
-            servico_gen = selectbox_com_borda_reativa("Serviço Realizado *", servicos_opcoes, st.session_state.get("gen_servico_assertec", "Escolher..."), "gen_servico_assertec")
+            servico_gen = selectbox_com_borda_dinamica("Serviço Realizado *", servicos_opcoes, "gen_servico_assertec")
             
             cliente_gen = st.text_input("Nome do Cliente *", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="gen_cliente_assertec")
             protocolo_gen = st.text_input("Número do Protocolo *", placeholder="EX: 114619", key="gen_protocolo_assertec")
@@ -835,13 +916,13 @@ with aba_gerador:
             st.error("🚨 **Atenção: Preencha todos os campos obrigatórios em destaque abaixo.**")
             
             tec_opcoes = ["Escolher...", "ANDERSON", "MARCIO"]
-            tecnico_selecionado = selectbox_com_borda_reativa("Técnico Responsável *", tec_opcoes, st.session_state.get("gen_tecnico_amigo", "Escolher..."), "gen_tecnico_amigo")
+            tecnico_selecionado = selectbox_com_borda_dinamica("Técnico Responsável *", tec_opcoes, "gen_tecnico_amigo")
             
-            cidades_opcoes = ["Escolher..."] + lista_cidades_amigo
-            cidade_gen = selectbox_com_borda_reativa("Cidade *", cidades_opcoes, st.session_state.get("gen_cidade_amigo", "Escolher..."), "gen_cidade_amigo")
+            cidades_opcoes = ["Escolher..."] + lista_cidades_amigo_gerador
+            cidade_gen = selectbox_com_borda_dinamica("Cidade *", cidades_opcoes, "gen_cidade_amigo")
             
             servicos_opcoes = lista_servicos_amigo_global 
-            servico_gen = selectbox_com_borda_reativa("Serviço Realizado *", servicos_opcoes, st.session_state.get("gen_servico_amigo", "Escolher..."), "gen_servico_amigo")
+            servico_gen = selectbox_com_borda_dinamica("Serviço Realizado *", servicos_opcoes, "gen_servico_amigo")
             
             cliente_gen = st.text_input("Nome do Cliente *", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="gen_cliente_amigo")
             protocolo_gen = st.text_input("Número do Protocolo *", placeholder="EX: 114619", key="gen_protocolo_amigo")
@@ -859,15 +940,7 @@ with aba_gerador:
             
             if t_ok and c_ok and s_ok and cli_ok and p_ok:
                 campos_preenchidos = True
-    else:
-        t_ok = False
-        c_ok = False
-        s_ok = False
-        cli_ok = False
-        p_ok = False
 
-    # Validação visual CSS para os campos de texto
-    if empresa_gen != "Escolher...":
         cli_valido = cliente_gen.strip() != "" and cliente_gen.strip() != "EX: ELISETE ANTONIA DOS SANTOS"
         proto_valido = protocolo_gen.strip() != "" and protocolo_gen.strip() != "EX: 114619"
         
@@ -888,7 +961,6 @@ with aba_gerador:
         st.markdown("---")
         obs_gen = st.text_area("Observações (Opcional)", placeholder="EX: Refeita configurações nos equipamentos...", key="gen_obs")
 
-        # Configuração do nome completo do técnico para a mensagem
         if tecnico_selecionado == "ANDERSON":
             tecnico_gen = "ANDERSON"
             nome_tec_completo = "ANDERSON WOLFART MOLLERKE" if empresa_gen == "AMIGO" else "Anderson"
@@ -896,7 +968,6 @@ with aba_gerador:
             tecnico_gen = "MARCIO"
             nome_tec_completo = "ANDERSON WOLFART MOLLERKE" if empresa_gen == "AMIGO" else "Márcio"
 
-        # O botão só executa e gera se todos os campos obrigatórios estiverem preenchidos
         if campos_preenchidos:
             if st.button("✨ Gerar Mensagem Pronta"):
                 if empresa_gen == "AMIGO":
