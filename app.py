@@ -5,8 +5,10 @@ import re
 import pandas as pd
 import openpyxl
 import os
-from datetime import datetime
+import json
 import urllib.parse
+import urllib.request
+from datetime import datetime, timedelta
 
 IS_CLOUD = os.path.exists("/mount/src")
 
@@ -17,8 +19,15 @@ else:
     pyautogui = None
     pyperclip = None
 
+# ==============================================================================
+# CONFIGURAÇÃO DA PLANILHA DE AGENDAMENTOS (GOOGLE SHEETS)
+# ==============================================================================
+URL_PLANILHA_AGENDAMENTOS_CSV = "https://docs.google.com/spreadsheets/d/1jXUw3oZKRPRXV53YCoqBxHUZN95igzpRN_r7yAhhoTk/export?format=csv"
+GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyw3jBYk7_FUYZuhzP9fNR7cvp12liyzF7hTwu8N8yqA4ul59brVHtyGg5Mz7WKwbNZ/exec"
+ARQUIVO_AGENDAMENTOS_LOCAL = "agendamentos_backup.csv"
+
 # Configuração de página alterada para centrado e com limite elegante
-st.set_page_config(page_title="Sistema de Atendimento - Assertec", layout="centered")
+st.set_page_config(page_title="Sistema de Atendimento - FibraWer", layout="centered")
 
 # CSS base global otimizado
 st.markdown(
@@ -57,64 +66,6 @@ lista_cidades_assertec = [
     "Alto Feliz", "Bom Principio", "Caxias do Sul", "Feliz", "Harmonia", "Ivoti", 
     "Linha Nova", "Pareci Novo", "Presidente Lucena", "São José do Hortêncio", 
     "São Sebastião do Caí", "São Vendelino", "Tupandi", "Vale Real"
-]
-
-lista_cidades_amigo_gerador = [
-    "Alto Feliz", "Bom Principio", "Caxias do Sul", "Feliz", "Harmonia", "Ivoti", 
-    "Linha Nova", "Pareci Novo", "Presidente Lucena", "São José do Hortêncio", 
-    "São Sebastião do Caí", "São Vendelino", "Tupandi", "Vale Real"
-]
-
-lista_cidades_amigo_forms = [
-    "Escolher",
-    "ALEGRETE",
-    "BENTO GONÇALVES",
-    "CACEQUI",
-    "CAMPO BOM",
-    "CANOAS",
-    "CARLOS BARBOSA",
-    "DOM PEDRITO",
-    "ESTRELA",
-    "FARROUPILHA",
-    "FELIZ",
-    "GARIBALDI",
-    "GRAVATAÍ",
-    "IGREJINHA",
-    "ITAARA",
-    "ITAQUI",
-    "JOENVILE",
-    "JOIA",
-    "LAJEADO",
-    "MATA",
-    "NOVA HARTZ",
-    "NOVA PETRÓPOLIS",
-    "NOVA PRATA",
-    "NOVO HAMBURGO",
-    "PAROBÉ",
-    "PORTO ALEGRE",
-    "SALVADOR DO SUL",
-    "SANTA CRUZ DO SUL",
-    "SANTA MARIA",
-    "SANTANA DO LIVRAMENTO",
-    "SANTIAGO",
-    "SÃO BORJA",
-    "SÃO FRANCISCO DE PAULA",
-    "SÃO LEOPOLDO",
-    "ALTO FELIZ",
-    "LINHA NOVA",
-    "SÃO JOSÉ DO HORTÊNCIO",
-    "IVOTI",
-    "VALE REAL",
-    "PRESIDENTE LUCENA",
-    "SÃO PEDRO DO SUL",
-    "SÃO SEBASTIÃO DO CAÍ",
-    "SAPIRANGA",
-    "TAQUARA",
-    "TEUTÔNIA",
-    "TRÊS COROAS",
-    "URUGUAIANA",
-    "VENÂNCIO AIRES",
-    "VILA FLORES"
 ]
 
 lista_servicos_assertec_global = [
@@ -194,12 +145,90 @@ lista_servicos_amigo_global = [
     "VISTORIA TÉCNICA / VIABILIDADE TÉCNICA"
 ]
 
+# Função global para renderizar Selectbox com borda reativa (Vermelho se "Escolher...", Verde se preenchido)
+def selectbox_com_borda_dinamica(label, opcoes, chave):
+    valor_atual = st.session_state.get(chave, "Escolher...")
+    esta_preenchido = valor_atual != "Escolher..."
+    
+    cor_borda = "#2e7d32" if esta_preenchido else "#ff4b4b"
+    bg_cor = "rgba(46, 125, 50, 0.03)" if esta_preenchido else "rgba(255, 75, 75, 0.03)"
+
+    st.markdown(f"""
+        <div style="
+            border: 2px solid {cor_borda};
+            background-color: {bg_cor};
+            border-radius: 6px;
+            padding: 4px 8px 0px 8px;
+            margin-bottom: 8px;
+        ">
+        <span style="font-size: 0.85rem; font-weight: 700; color: {cor_borda};">{label}</span>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    return st.selectbox(label, opcoes, key=chave, label_visibility="collapsed")
+
+# --- FUNÇÕES DE LEITURA E GRAVAÇÃO DE AGENDAMENTOS (5 COLUNAS: NOME, CLIENTE, PROTOCOLO, CIDADE, OBS) ---
+def carregar_agendamentos():
+    colunas_padrao = ["NOME", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"]
+    try:
+        url_com_cache_buster = f"{URL_PLANILHA_AGENDAMENTOS_CSV}&t={int(time.time())}"
+        df = pd.read_csv(url_com_cache_buster)
+        df.columns = [str(c).strip().upper() for c in df.columns]
+        if not df.empty:
+            return df
+    except Exception:
+        pass
+    
+    if os.path.exists(ARQUIVO_AGENDAMENTOS_LOCAL):
+        try:
+            df_local = pd.read_csv(ARQUIVO_AGENDAMENTOS_LOCAL)
+            df_local.columns = [str(c).strip().upper() for c in df_local.columns]
+            return df_local
+        except Exception:
+            pass
+    return pd.DataFrame(columns=colunas_padrao)
+
+def salvar_agendamento(dados):
+    # Salva no Backup Local CSV com as 5 colunas exatas
+    df_atual = carregar_agendamentos()
+    novo_df = pd.DataFrame([{
+        "NOME": dados["nome"],
+        "CLIENTE": dados["cliente"],
+        "PROTOCOLO": dados["protocolo"],
+        "CIDADE": dados["cidade"],
+        "OBS": dados["obs"]
+    }])
+    df_final = pd.concat([df_atual, novo_df], ignore_index=True)
+    df_final.to_csv(ARQUIVO_AGENDAMENTOS_LOCAL, index=False)
+
+    # Envia para o Google Sheets via Apps Script
+    if GOOGLE_SCRIPT_URL.strip():
+        try:
+            req = urllib.request.Request(
+                GOOGLE_SCRIPT_URL.strip(),
+                data=json.dumps(dados).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return True, "Agendamento salvo na Planilha do Google Sheets!"
+        except Exception as e:
+            return True, f"Salvo localmente (Aviso Google Sheets: {e})"
+    return True, "Salvo localmente!"
+
 # --- CRIAÇÃO DAS ABAS PRINCIPAIS ---
 if IS_CLOUD:
-    aba_gerador = st.container()
+    aba_gerador, aba_agendamentos = st.tabs([
+        "📱 Gerador de Mensagens (Telemóvel)", 
+        "📅 Agendamentos"
+    ])
     aba_gestao = None
 else:
-    aba_gestao, aba_gerador = st.tabs(["💻 Gestão & Computador (Checklists & Excel)", "📱 Gerador de Mensagens (Telemóvel)"])
+    aba_gestao, aba_gerador, aba_agendamentos = st.tabs([
+        "💻 Gestão & Computador (Assertec & Excel)", 
+        "📱 Gerador de Mensagens (Telemóvel)",
+        "📅 Agendamentos"
+    ])
 
 # ==========================================
 # ABA 1: GESTÃO & COMPUTADOR
@@ -230,7 +259,7 @@ if aba_gestao is not None:
             linhas = [l.strip() for l in texto.strip().split("\n") if l.strip()]
             primeiro_texto = linhas[0].lower() if len(linhas) > 0 else ""
             if "amigo" in primeiro_texto or "tecpar" in primeiro_texto:
-                st.session_state["formulario_escolhido"] = "Brasil TecPar / Amigo"
+                st.session_state["formulario_escolhido"] = "Brasil TecPar / Amigo (Apenas Planilha Excel)"
             else:
                 st.session_state["formulario_escolhido"] = "Assertec / Fibrawer"
 
@@ -265,7 +294,6 @@ if aba_gestao is not None:
             key="msg_input"
         )
 
-        # Sempre sincroniza os dados se houver texto válido na caixa
         if msg_texto.strip():
             processar_texto_atual(msg_texto)
 
@@ -285,7 +313,7 @@ if aba_gestao is not None:
                 st.error("Cole uma mensagem válida.")
             else:
                 processar_texto_atual(msg_texto)
-                st.success(f"Mensagem processada! Formulário: **{st.session_state['formulario_escolhido']}** | Técnico Identificado: **{st.session_state['tec_msg']}**")
+                st.success(f"Mensagem processada! Fluxo: **{st.session_state['formulario_escolhido']}** | Técnico Identificado: **{st.session_state['tec_msg']}**")
 
         def traduzir_para_excel(servico_wpp, metragem_str, cidade_atendimento):
             s = servico_wpp.upper()
@@ -310,7 +338,6 @@ if aba_gestao is not None:
             except:
                 m = 0
             
-            # Verifica BATIDA ou BATIMENTO primeiro para nunca confundir com instalação
             if "BATIDA" in s or "BATIMENTO" in s:
                 if "1/16" in s or "1X16" in s:
                     return f"BATIDA DE CTO 1/16{sufixo_fb}"
@@ -536,203 +563,6 @@ if aba_gestao is not None:
                         
                         st.success("Automação Assertec concluída com sucesso! 🚀")
 
-            elif formulario_escolhido == "Brasil TecPar / Amigo":
-                btn_executar_amigo = st.button("🚀 Executar Amigo", key="btn_exec_amig_topo")
-                if btn_executar_amigo:
-                    tecnico_amigo_val = "ANDERSON WOLFART MOLLERKE"
-                    cidade_importada_amigo = st.session_state.get("cidade", "")
-                    servico_importado_amigo = st.session_state.get("servico", "")
-                    cliente_val = st.session_state.get("cli", "")
-                    protocolo_val = st.session_state.get("proto", "")
-                    quantidade_cabo_val = st.session_state.get("qtd", "") if st.session_state.get("qtd", "").strip() else "0"
-                    observacao_val = st.session_state.get("obs", "")
-                    
-                    mapa_cidades_equivalentes_amigo = {
-                        "bom principio": "SÃO SEBASTIÃO DO CAÍ",
-                        "bom princípio": "SÃO SEBASTIÃO DO CAÍ",
-                        "harmonia": "SÃO SEBASTIÃO DO CAÍ",
-                        "pareci novo": "SÃO SEBASTIÃO DO CAÍ",
-                        "tupandi": "SÃO SEBASTIÃO DO CAÍ",
-                        "são vendelino": "FELIZ",
-                        "sao vendelino": "FELIZ"
-                    }
-                    
-                    cidade_busca_amigo = cidade_importada_amigo.strip().lower()
-                    cidade_alvo_forms = mapa_cidades_equivalentes_amigo.get(cidade_busca_amigo, cidade_importada_amigo.strip())
-                    
-                    cidade_idx_amigo = 0
-                    for idx, c in enumerate(lista_cidades_amigo_forms):
-                        if c.lower() == cidade_alvo_forms.lower() and cidade_alvo_forms:
-                            cidade_idx_amigo = idx
-                            break
-                    if cidade_idx_amigo == 0 and cidade_alvo_forms:
-                        for idx, c in enumerate(lista_cidades_amigo_forms):
-                            if c.lower() in cidade_alvo_forms.lower() or cidade_alvo_forms.lower() in c.lower():
-                                cidade_idx_amigo = idx
-                                break
-                    
-                    servico_idx_amigo = 0
-                    serv_imp_clean_amigo = servico_importado_amigo.strip().lower()
-                    if serv_imp_clean_amigo:
-                        for idx, s in enumerate(lista_servicos_amigo_global):
-                            if s.strip().lower() == serv_imp_clean_amigo:
-                                servico_idx_amigo = idx
-                                break
-                        if servico_idx_amigo == 0:
-                            for idx, s in enumerate(lista_servicos_amigo_global):
-                                if serv_imp_clean_amigo in s.strip().lower():
-                                    servico_idx_amigo = idx
-                                    break
-
-                    st.warning("⚡ A executar automação Brasil TecPar... Não mexa no rato nem no teclado.")
-                    webbrowser.open("https://docs.google.com/forms/d/e/1FAIpQLSfDT9GbrgCv5vcOi2fvZoeuPITItTWIQFWmS2vO_NY7gMEvQA/viewform")
-                    time.sleep(2.5)
-                    
-                    for _ in range(3):
-                        pyautogui.press('tab')
-                        time.sleep(0.04)
-                    
-                    pyautogui.press('enter')
-                    time.sleep(0.3)
-                    pyautogui.write("ASSERTEC SERVICOS E TECNOLOGIA LTDA")
-                    time.sleep(0.15)
-                    pyautogui.press('enter')
-                    time.sleep(0.15)
-                    
-                    pyautogui.press('tab')
-                    time.sleep(0.05)
-                    pyautogui.press('enter')
-                    time.sleep(0.3)
-                    pyautogui.write(tecnico_amigo_val)
-                    time.sleep(0.15)
-                    pyautogui.press('enter')
-                    time.sleep(0.15)
-                    
-                    pyautogui.press('tab')
-                    time.sleep(0.05)
-                    pyautogui.press('enter')
-                    time.sleep(1.2)
-                    
-                    for _ in range(3):
-                        pyautogui.press('tab')
-                        time.sleep(0.04)
-                        
-                    pyperclip.copy(str(protocolo_val))
-                    pyautogui.hotkey('ctrl', 'v')
-                    time.sleep(0.15)
-                    
-                    pyautogui.press('tab')
-                    time.sleep(0.05)
-                    pyautogui.press('enter')
-                    time.sleep(0.3)
-                    pyautogui.write("AMIGO - VAREJO")
-                    time.sleep(0.15)
-                    pyautogui.press('enter')
-                    time.sleep(0.15)
-                    
-                    pyautogui.press('tab')
-                    time.sleep(0.05)
-                    pyperclip.copy(str(cliente_val))
-                    pyautogui.hotkey('ctrl', 'v')
-                    time.sleep(0.15)
-                    
-                    pyautogui.press('tab')
-                    time.sleep(0.05)
-                    pyautogui.press('enter')
-                    time.sleep(0.3)
-                    
-                    pyautogui.press('home')
-                    time.sleep(0.1)
-                    for _ in range(cidade_idx_amigo):
-                        pyautogui.press('down')
-                        time.sleep(0.03)
-                    pyautogui.press('enter')
-                    time.sleep(0.15)
-                    
-                    pyautogui.press('tab')
-                    time.sleep(0.1)
-                    pyautogui.press('tab')
-                    time.sleep(0.1)
-                    pyperclip.copy("0")
-                    pyautogui.hotkey('ctrl', 'v')
-                    time.sleep(0.15)
-                    
-                    pyautogui.press('tab')
-                    time.sleep(0.05)
-                    pyautogui.press('tab')
-                    time.sleep(0.05)
-                    pyautogui.press('enter')
-                    time.sleep(1.2)
-                    
-                    for _ in range(3):
-                        pyautogui.press('tab')
-                        time.sleep(0.04)
-                        
-                    pyautogui.press('enter')
-                    time.sleep(0.3)
-                    
-                    pyautogui.press('home')
-                    time.sleep(0.1)
-                    for _ in range(servico_idx_amigo):
-                        pyautogui.press('down')
-                        time.sleep(0.03)
-                    
-                    pyautogui.press('enter')
-                    time.sleep(0.3)
-                    pyautogui.press('tab')
-                    time.sleep(0.05)
-                    pyautogui.press('tab')
-                    time.sleep(0.05)
-                    pyautogui.press('tab')
-                    time.sleep(0.05)
-                    pyautogui.press('enter')
-                    time.sleep(1.2)
-                    
-                    servico_atual_upper = servico_importado_amigo.upper()
-                    pula_pagina_cabo = "BATIMENTO" in servico_atual_upper or "DESATIVAÇÃO" in servico_atual_upper or "DIÁRIAS" in servico_atual_upper or "RNC" in servico_atual_upper or "VISTORIA" in servico_atual_upper
-                    
-                    if not pula_pagina_cabo:
-                        for _ in range(3):
-                            pyautogui.press('tab')
-                            time.sleep(0.04)
-                            
-                        pyperclip.copy(str(quantidade_cabo_val))
-                        pyautogui.hotkey('ctrl', 'v')
-                        time.sleep(0.15)
-                        
-                        pyautogui.press('tab')
-                        time.sleep(0.05)
-                        pyautogui.press('tab')
-                        time.sleep(0.05)
-                        pyautogui.press('enter')
-                        time.sleep(1.2)
-                    
-                    for _ in range(3):
-                        pyautogui.press('tab')
-                        time.sleep(0.04)
-                        
-                    pyperclip.copy("1")
-                    pyautogui.hotkey('ctrl', 'v')
-                    time.sleep(0.15)
-                    
-                    pyautogui.press('tab')
-                    time.sleep(0.05)
-                    pyautogui.press('tab')
-                    time.sleep(0.05)
-                    pyautogui.press('enter')
-                    time.sleep(1.2)
-                    
-                    for _ in range(3):
-                        pyautogui.press('tab')
-                        time.sleep(0.04)
-                        
-                    if observacao_val.strip():
-                        pyperclip.copy(str(observacao_val))
-                        pyautogui.hotkey('ctrl', 'v')
-                        time.sleep(0.15)
-                    
-                    st.success("Automação Brasil TecPar concluída até às Observações! 🚀")
-
             st.markdown("")
             col_lancar, col_conferir_plan, col_vazio_botoes = st.columns([1.5, 1.5, 2])
             
@@ -784,16 +614,10 @@ if aba_gestao is not None:
                             st.info(f"ℹ️ O termo **'{termo_busca}'** ainda não foi encontrado na planilha de **{tec_msg_atual}**.")
 
         st.markdown("---")
-        st.subheader("🔍 Consulta Global de Cliente / Protocolo")
+        st.subheader("🔍 Consulta Global de Cliente / Protocolo (Assertec)")
         termo_pesquisa_global = st.text_input("Consultar por Nome do Cliente ou Protocolo:", value=st.session_state.get("cli", ""), key="pesquisa_global_topo")
 
-        col_conf_ass_topo, col_conf_amig_topo, col_espaco_topo = st.columns([1.2, 1.2, 3])
-        with col_conf_ass_topo:
-            btn_conf_ass_topo = st.button("🔍 Conferir Assertec", key="btn_conf_ass_topo_key")
-        with col_conf_amig_topo:
-            btn_conf_amig_topo = st.button("🔍 Conferir Amigo", key="btn_conf_amig_topo_key")
-
-        if btn_conf_ass_topo:
+        if st.button("🔍 Conferir Assertec", key="btn_conf_ass_topo_key"):
             if not termo_pesquisa_global.strip():
                 st.warning("Insira o nome de um cliente ou protocolo na caixa de pesquisa.")
             else:
@@ -816,26 +640,11 @@ if aba_gestao is not None:
                     except Exception:
                         st.warning("Não foi possível ler a planilha automaticamente.")
 
-        if btn_conf_amig_topo:
-            if not termo_pesquisa_global.strip():
-                st.warning("Insira o nome do cliente ou protocolo na caixa de pesquisa.")
-            else:
-                with st.spinner("A abrir a planilha da Amigo..."):
-                    webbrowser.open("https://docs.google.com/spreadsheets/d/1jESKPwkNUo0ocIPOUCzKKeq8wav57Rdd_K9MF3WBSDk/edit?gid=1573921361#gid=1573921361")
-                    time.sleep(3.5)
-                    pyautogui.hotkey('ctrl', 'f')
-                    time.sleep(0.4)
-                    pyperclip.copy(str(termo_pesquisa_global))
-                    pyautogui.hotkey('ctrl', 'v')
-                    time.sleep(0.3)
-                    pyautogui.press('enter')
-                st.success(f"✅ Planilha Amigo aberta! Procurou por **'{termo_pesquisa_global}'**.")
-
         st.markdown("---")
         
         if st.session_state.get("mensagem_processada", False):
             formulario_escolhido = st.session_state["formulario_escolhido"]
-            st.info(f"📋 Formulário ativo no momento: **{formulario_escolhido}** | Técnico da Mensagem: **{st.session_state.get('tec_msg', 'N/D')}**")
+            st.info(f"📋 Fluxo ativo: **{formulario_escolhido}** | Técnico da Mensagem: **{st.session_state.get('tec_msg', 'N/D')}**")
 
             st.subheader(f"📋 Relatório de Conferência - {formulario_escolhido}")
             
@@ -859,27 +668,6 @@ if aba_gestao is not None:
 with aba_gerador:
     st.subheader("📱 Gerador de Mensagem Padronizada para WhatsApp")
     st.markdown("Selecione a empresa e preencha todos os campos obrigatórios para liberar a geração da mensagem.")
-
-    def selectbox_com_borda_dinamica(label, opcoes, chave):
-        valor_atual = st.session_state.get(chave, "Escolher...")
-        esta_preenchido = valor_atual != "Escolher..."
-        
-        cor_borda = "#2e7d32" if esta_preenchido else "#ff4b4b"
-        bg_cor = "rgba(46, 125, 50, 0.03)" if esta_preenchido else "rgba(255, 75, 75, 0.03)"
-
-        st.markdown(f"""
-            <div style="
-                border: 2px solid {cor_borda};
-                background-color: {bg_cor};
-                border-radius: 6px;
-                padding: 4px 8px 0px 8px;
-                margin-bottom: 8px;
-            ">
-            <span style="font-size: 0.85rem; font-weight: 700; color: {cor_borda};">{label}</span>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        return st.selectbox(label, opcoes, key=chave, label_visibility="collapsed")
 
     opcoes_empresa = ["Escolher...", "ASSERTEC", "AMIGO"]
     empresa_gen = selectbox_com_borda_dinamica("Empresa / Tipo *", opcoes_empresa, "gen_empresa")
@@ -918,7 +706,7 @@ with aba_gerador:
             tec_opcoes = ["Escolher...", "ANDERSON", "MARCIO"]
             tecnico_selecionado = selectbox_com_borda_dinamica("Técnico Responsável *", tec_opcoes, "gen_tecnico_amigo")
             
-            cidades_opcoes = ["Escolher..."] + lista_cidades_amigo_gerador
+            cidades_opcoes = ["Escolher..."] + lista_cidades_assertec
             cidade_gen = selectbox_com_borda_dinamica("Cidade *", cidades_opcoes, "gen_cidade_amigo")
             
             servicos_opcoes = lista_servicos_amigo_global 
@@ -1003,3 +791,118 @@ Obs: {obs_gen}"""
         mensagem_url = urllib.parse.quote(st.session_state["mensagem_gerada_final"])
         link_whatsapp = f"https://wa.me/?text={mensagem_url}"
         st.link_button("📲 Enviar diretamente para o WhatsApp", link_whatsapp)
+
+# ==========================================
+# ABA 3: CENTRAL DE AGENDAMENTOS (NOME, CLIENTE, PROTOCOLO, CIDADE, OBS)
+# ==========================================
+with aba_agendamentos:
+    data_amanha_dt = datetime.now() + timedelta(days=1)
+    data_amanha_str = data_amanha_dt.strftime("%d/%m/%Y")
+
+    st.subheader(f"🔔 Agendamentos para Amanhã ({data_amanha_str})")
+    
+    df_agend = carregar_agendamentos()
+    if not df_agend.empty and "OBS" in df_agend.columns:
+        df_amanha = df_agend[
+            df_agend.apply(lambda r: data_amanha_str in str(r.values), axis=1)
+        ]
+        if not df_amanha.empty:
+            st.success(f"📌 Existem **{len(df_amanha)}** atendimento(s) agendado(s) para amanhã ({data_amanha_str}):")
+            for idx, row in df_amanha.iterrows():
+                with st.container():
+                    st.markdown(
+                        f"""
+                        <div style="border-left: 5px solid #2e7d32; background-color: rgba(46, 125, 50, 0.06); padding: 10px 14px; border-radius: 6px; margin-bottom: 8px;">
+                            <strong>🏙️ Cidade: {row.get('CIDADE', 'N/D')} &nbsp;|&nbsp; 👤 Registado por: {row.get('NOME', 'N/D')}</strong><br>
+                            👤 <strong>Cliente:</strong> {row.get('CLIENTE', 'N/D')} &nbsp;|&nbsp; 🔢 <strong>Protocolo:</strong> {row.get('PROTOCOLO', 'N/D')}<br>
+                            📝 <strong>Obs / Data:</strong> {row.get('OBS', '-')}
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+        else:
+            st.info(f"✅ Nenhum agendamento registado para amanhã ({data_amanha_str}) até ao momento.")
+    else:
+        st.info(f"✅ Nenhum agendamento registado para amanhã ({data_amanha_str}) até ao momento.")
+
+    with st.expander("📆 Ver Todos os Agendamentos da Planilha"):
+        if not df_agend.empty:
+            st.dataframe(df_agend, use_container_width=True)
+        else:
+            st.write("Ainda não há agendamentos na planilha.")
+
+    st.markdown("---")
+    st.subheader("📝 Novo Agendamento")
+    st.markdown("Preencha os campos obrigatórios para gravar na planilha e gerar a mensagem para o grupo do WhatsApp.")
+
+    col_data, col_nome = st.columns(2)
+    with col_data:
+        data_escolhida = st.date_input("Data do Agendamento *", value=data_amanha_dt, format="DD/MM/YYYY", key="ag_data")
+    with col_nome:
+        nome_ag = st.text_input("Nome (Quem agendou / Técnico) *", placeholder="EX: MAIARA / MARCIO", key="ag_nome")
+
+    cliente_ag = st.text_input("Cliente (Agendamento) *", placeholder="EX: JOÃO DA SILVA", key="ag_cliente")
+    protocolo_ag = st.text_input("Protocolo (Agendamento) *", placeholder="EX: 2129988", key="ag_protocolo")
+    cidade_ag = selectbox_com_borda_dinamica("Cidade *", ["Escolher..."] + lista_cidades_assertec, "ag_cidade")
+    obs_ag = st.text_area("Observações (Turno, Endereço, Detalhes)", placeholder="EX: Manhã - Rua das Flores, 123 - Ligar antes", key="ag_obs")
+
+    # Validação visual dos campos obrigatórios (Vermelho se vazio, Verde se preenchido)
+    nome_ag_ok = nome_ag.strip() != ""
+    cli_ag_ok = cliente_ag.strip() != ""
+    proto_ag_ok = protocolo_ag.strip() != ""
+    cid_ag_ok = cidade_ag != "Escolher..."
+
+    cor_nome_ag = "#2e7d32" if nome_ag_ok else "#ff4b4b"
+    cor_cli_ag = "#2e7d32" if cli_ag_ok else "#ff4b4b"
+    cor_proto_ag = "#2e7d32" if proto_ag_ok else "#ff4b4b"
+
+    st.markdown(f"""
+        <style>
+        input[aria-label="Nome (Quem agendou / Técnico) *"] {{
+            border: 2px solid {cor_nome_ag} !important;
+        }}
+        input[aria-label="Cliente (Agendamento) *"] {{
+            border: 2px solid {cor_cli_ag} !important;
+        }}
+        input[aria-label="Protocolo (Agendamento) *"] {{
+            border: 2px solid {cor_proto_ag} !important;
+        }}
+        </style>
+    """, unsafe_allow_html=True)
+
+    agendamento_valido = nome_ag_ok and cli_ag_ok and proto_ag_ok and cid_ag_ok
+
+    if agendamento_valido:
+        if st.button("💾 Salvar na Planilha e Gerar Mensagem"):
+            data_fmt = data_escolhida.strftime("%d/%m/%Y")
+            obs_final_planilha = f"[{data_fmt}] {obs_ag.strip()}" if obs_ag.strip() else f"[{data_fmt}]"
+            
+            dados_novo_ag = {
+                "nome": nome_ag.strip().upper(),
+                "cliente": cliente_ag.strip().upper(),
+                "protocolo": protocolo_ag.strip(),
+                "cidade": cidade_ag,
+                "obs": obs_final_planilha
+            }
+            
+            ok, msg_retorno = salvar_agendamento(dados_novo_ag)
+            if ok:
+                st.success(f"✅ {msg_retorno}")
+
+            msg_whatsapp_ag = f"""📅 *AGENDAMENTO ({data_fmt})*
+👤 *Nome:* {nome_ag.strip().upper()}
+🏠 *Cliente:* {cliente_ag.strip().upper()}
+🔢 *Protocolo:* {protocolo_ag.strip()}
+🏙️ *Cidade:* {cidade_ag}
+📝 *Obs:* {obs_ag.strip() or 'Nenhuma'}"""
+            st.session_state["msg_agendamento_gerada"] = msg_whatsapp_ag
+    else:
+        st.warning("⚠️ Preencha todos os campos obrigatórios (em vermelho) para liberar o registo do agendamento.")
+
+    if "msg_agendamento_gerada" in st.session_state and st.session_state["msg_agendamento_gerada"]:
+        st.markdown("### 📋 Mensagem de Agendamento Pronta:")
+        st.code(st.session_state["msg_agendamento_gerada"], language="text")
+        
+        msg_ag_url = urllib.parse.quote(st.session_state["msg_agendamento_gerada"])
+        link_wpp_ag = f"https://wa.me/?text={msg_ag_url}"
+        st.link_button("📲 Enviar para o Grupo do WhatsApp", link_wpp_ag)
