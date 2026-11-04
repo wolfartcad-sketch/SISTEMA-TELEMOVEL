@@ -183,7 +183,16 @@ def normalizar_df_agendamentos(df):
     if "DATA" not in df.columns and "NOME" in df.columns:
         df = df.rename(columns={"NOME": "DATA"})
     for col in colunas_padrao:
-        def buscar_agendamentos_remoto():
+        if col not in df.columns:
+            df[col] = ""
+    df = df[colunas_padrao].fillna("")
+    for col in colunas_padrao:
+        df[col] = df[col].astype(str).str.strip()
+    df["PROTOCOLO"] = df["PROTOCOLO"].apply(limpar_protocolo_str)
+    df = df[(df["CLIENTE"] != "") | (df["PROTOCOLO"] != "")]
+    return df.reset_index(drop=True)
+
+def buscar_agendamentos_remoto():
     colunas_padrao = ["DATA", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"]
     try:
         url_csv = f"{URL_PLANILHA_AGENDAMENTOS_CSV}&t={int(time.time())}"
@@ -195,13 +204,6 @@ def normalizar_df_agendamentos(df):
         df.to_csv(ARQUIVO_AGENDAMENTOS_LOCAL, index=False)
         return df
     except Exception:
-        if os.path.exists(ARQUIVO_AGENDAMENTOS_LOCAL):
-            try:
-                df_local = pd.read_csv(ARQUIVO_AGENDAMENTOS_LOCAL, dtype=str).fillna("")
-                return normalizar_df_agendamentos(df_local)
-            except Exception:
-                pass
-    return pd.DataFrame(columns=colunas_padrao)
         if os.path.exists(ARQUIVO_AGENDAMENTOS_LOCAL):
             try:
                 df_local = pd.read_csv(ARQUIVO_AGENDAMENTOS_LOCAL, dtype=str).fillna("")
