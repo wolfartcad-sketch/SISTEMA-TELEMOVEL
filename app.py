@@ -1,9 +1,8 @@
 import streamlit as st
-import webbrowser
 import time
 import re
+import io
 import pandas as pd
-import openpyxl # type: ignore
 import os
 import json
 import urllib.parse
@@ -13,9 +12,13 @@ from datetime import datetime, timedelta
 IS_CLOUD = os.path.exists("/mount/src")
 
 if not IS_CLOUD:
+    import webbrowser
+    import openpyxl
     import pyautogui
     import pyperclip
 else:
+    webbrowser = None
+    openpyxl = None
     pyautogui = None
     pyperclip = None
 
@@ -180,26 +183,25 @@ def normalizar_df_agendamentos(df):
     if "DATA" not in df.columns and "NOME" in df.columns:
         df = df.rename(columns={"NOME": "DATA"})
     for col in colunas_padrao:
-        if col not in df.columns:
-            df[col] = ""
-    df = df[colunas_padrao].fillna("")
-    for col in colunas_padrao:
-        df[col] = df[col].astype(str).str.strip()
-    df["PROTOCOLO"] = df["PROTOCOLO"].apply(limpar_protocolo_str)
-    df = df[(df["CLIENTE"] != "") | (df["PROTOCOLO"] != "")]
-    return df.reset_index(drop=True)
-
-def buscar_agendamentos_remoto():
+        def buscar_agendamentos_remoto():
     colunas_padrao = ["DATA", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"]
     try:
         url_csv = f"{URL_PLANILHA_AGENDAMENTOS_CSV}&t={int(time.time())}"
         req = urllib.request.Request(url_csv, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=4) as resp:
-            df = pd.read_csv(resp, dtype=str).fillna("")
+            conteudo_csv = resp.read().decode("utf-8")
+        df = pd.read_csv(io.StringIO(conteudo_csv), dtype=str).fillna("")
         df = normalizar_df_agendamentos(df)
         df.to_csv(ARQUIVO_AGENDAMENTOS_LOCAL, index=False)
         return df
     except Exception:
+        if os.path.exists(ARQUIVO_AGENDAMENTOS_LOCAL):
+            try:
+                df_local = pd.read_csv(ARQUIVO_AGENDAMENTOS_LOCAL, dtype=str).fillna("")
+                return normalizar_df_agendamentos(df_local)
+            except Exception:
+                pass
+    return pd.DataFrame(columns=colunas_padrao)
         if os.path.exists(ARQUIVO_AGENDAMENTOS_LOCAL):
             try:
                 df_local = pd.read_csv(ARQUIVO_AGENDAMENTOS_LOCAL, dtype=str).fillna("")
