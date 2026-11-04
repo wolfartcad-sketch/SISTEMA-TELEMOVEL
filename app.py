@@ -189,7 +189,7 @@ def normalizar_df_agendamentos(df):
     df = df[(df["CLIENTE"] != "") | (df["PROTOCOLO"] != "")]
     return df.reset_index(drop=True)
 
-def def buscar_agendamentos_remoto():
+def buscar_agendamentos_remoto():
     colunas_padrao = ["DATA", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"]
     try:
         url_csv = f"{URL_PLANILHA_AGENDAMENTOS_CSV}&t={int(time.time())}"
