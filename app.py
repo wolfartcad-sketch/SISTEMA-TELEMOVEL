@@ -2,7 +2,8 @@ import streamlit as st
 import time
 import re
 import io
-import pandas as pd
+import csv
+import html
 import os
 import json
 import urllib.parse
@@ -12,11 +13,13 @@ from datetime import datetime, timedelta
 IS_CLOUD = os.path.exists("/mount/src")
 
 if not IS_CLOUD:
+    import pandas as pd
     import webbrowser
     import openpyxl
     import pyautogui
     import pyperclip
 else:
+    pd = None
     webbrowser = None
     openpyxl = None
     pyautogui = None
@@ -29,6 +32,7 @@ SHEET_ID_AGENDAMENTOS = "1jXUw3oZKRPRXV53YCoqBxHUZN95igzpRN_r7yAhhoTk"
 URL_PLANILHA_AGENDAMENTOS_CSV = f"https://docs.google.com/spreadsheets/d/{SHEET_ID_AGENDAMENTOS}/gviz/tq?tqx=out:csv"
 GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyaSys2BNpDUVeM74BPvDxmseMYo2L57LnaZspAYIhBZ-qpaXIArbEqrvp_Cb1IhigF/exec"
 ARQUIVO_AGENDAMENTOS_LOCAL = "agendamentos_backup.csv"
+COLUNAS_PADRAO_AG = ["DATA", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"]
 
 st.set_page_config(page_title="Sistema de Atendimento - FibraWer", layout="centered")
 
@@ -175,55 +179,68 @@ def limpar_protocolo_str(val):
         texto = texto[:-2]
     return texto
 
-def normalizar_df_agendamentos(df):
-    colunas_padrao = ["DATA", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"]
-    if df is None or df.empty:
-        return pd.DataFrame(columns=colunas_padrao)
-    df.columns = [str(c).strip().upper() for c in df.columns]
-    if "DATA" not in df.columns and "NOME" in df.columns:
-        df = df.rename(columns={"NOME": "DATA"})
-    for col in colunas_padrao:
-        if col not in df.columns:
-            df[col] = ""
-    df = df[colunas_padrao].fillna("")
-    for col in colunas_padrao:
-        df[col] = df[col].astype(str).str.strip()
-    df["PROTOCOLO"] = df["PROTOCOLO"].apply(limpar_protocolo_str)
-    df = df[(df["CLIENTE"] != "") | (df["PROTOCOLO"] != "")]
-    return df.reset_index(drop=True)
+def normalizar_lista_agendamentos(linhas_raw):
+    resultado = []
+    if not linhas_raw:
+        return resultado
+    for item in linhas_raw:
+        if not isinstance(item, dict):
+            continue
+        norm = {str(k or "").strip().upper(): str(v or "").strip() for k, v in item.items()}
+        if "DATA" not in norm and "NOME" in norm:
+            norm["DATA"] = norm.get("NOME", "")
+        reg = {
+            "DATA": norm.get("DATA", ""),
+            "CLIENTE": norm.get("CLIENTE", ""),
+            "PROTOCOLO": limpar_protocolo_str(norm.get("PROTOCOLO", "")),
+            "CIDADE": norm.get("CIDADE", ""),
+            "OBS": norm.get("OBS", "")
+        }
+        if reg["CLIENTE"] != "" or reg["PROTOCOLO"] != "":
+            resultado.append(reg)
+    return resultado
+
+def salvar_backup_csv(lista_ag):
+    try:
+        with open(ARQUIVO_AGENDAMENTOS_LOCAL, mode="w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=COLUNAS_PADRAO_AG)
+            writer.writeheader()
+            for row in lista_ag:
+                writer.writerow({c: row.get(c, "") for c in COLUNAS_PADRAO_AG})
+    except Exception:
+        pass
+
+def ler_csv_texto(conteudo_csv):
+    leitor = csv.DictReader(io.StringIO(conteudo_csv))
+    return normalizar_lista_agendamentos(list(leitor))
 
 def buscar_agendamentos_remoto():
-    colunas_padrao = ["DATA", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"]
     try:
         url_csv = f"{URL_PLANILHA_AGENDAMENTOS_CSV}&t={int(time.time())}"
         req = urllib.request.Request(url_csv, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=4) as resp:
-            conteudo_csv = resp.read().decode("utf-8")
-        df = pd.read_csv(io.StringIO(conteudo_csv), dtype=str).fillna("")
-        df = normalizar_df_agendamentos(df)
-        df.to_csv(ARQUIVO_AGENDAMENTOS_LOCAL, index=False)
-        return df
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            conteudo_csv = resp.read().decode("utf-8", errors="replace")
+        lista = ler_csv_texto(conteudo_csv)
+        salvar_backup_csv(lista)
+        return lista
     except Exception:
         if os.path.exists(ARQUIVO_AGENDAMENTOS_LOCAL):
             try:
-                df_local = pd.read_csv(ARQUIVO_AGENDAMENTOS_LOCAL, dtype=str).fillna("")
-                return normalizar_df_agendamentos(df_local)
+                with open(ARQUIVO_AGENDAMENTOS_LOCAL, mode="r", encoding="utf-8") as f:
+                    return ler_csv_texto(f.read())
             except Exception:
                 pass
-    return pd.DataFrame(columns=colunas_padrao)
+    return []
 
 def obter_df_agendamentos():
     if "df_agendamentos_mem" not in st.session_state:
         st.session_state["df_agendamentos_mem"] = buscar_agendamentos_remoto()
     return st.session_state["df_agendamentos_mem"]
 
-def atualizar_memoria_e_backup(df_novo):
-    df_limpo = normalizar_df_agendamentos(df_novo)
-    st.session_state["df_agendamentos_mem"] = df_limpo
-    try:
-        df_limpo.to_csv(ARQUIVO_AGENDAMENTOS_LOCAL, index=False)
-    except Exception:
-        pass
+def atualizar_memoria_e_backup(lista_nova):
+    lista_limpa = normalizar_lista_agendamentos(lista_nova)
+    st.session_state["df_agendamentos_mem"] = lista_limpa
+    salvar_backup_csv(lista_limpa)
 
 def enviar_post_sheets(payload):
     if not GOOGLE_SCRIPT_URL.strip():
@@ -235,7 +252,7 @@ def enviar_post_sheets(payload):
             headers={"Content-Type": "application/json"},
             method="POST"
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=8) as resp:
             return True, "Sincronizado com a Planilha Google!"
     except Exception as e:
         return False, f"Aviso Google Sheets: {e}"
@@ -834,7 +851,6 @@ with aba_agendamentos:
     data_amanha_dt = (datetime.now() + timedelta(days=1)).date()
     data_amanha_str = data_amanha_dt.strftime("%d/%m/%Y")
 
-    # Inicialização segura de todas as variáveis de estado ANTES dos componentes
     if "ag_data" not in st.session_state:
         st.session_state["ag_data"] = data_amanha_dt
     if "ag_nome" not in st.session_state:
@@ -856,16 +872,15 @@ with aba_agendamentos:
     if "aviso_topo_ag" not in st.session_state:
         st.session_state["aviso_topo_ag"] = None
 
-    # --- CALLBACKS DE INTERAÇÃO POR ÍNDICE ÚNICO (idx) ---
     def cb_acao_card(chave_select, idx_linha, proto_item, data_item, cli_item, cid_item, obs_item):
         acao = st.session_state.get(chave_select, "Ações...")
         st.session_state[chave_select] = "Ações..."
 
         if acao == "✅ Concluído":
-            df_mem = obter_df_agendamentos().copy()
-            if idx_linha in df_mem.index:
-                df_mem.loc[idx_linha, "OBS"] = "✅ [CONCLUÍDO] " + str(df_mem.loc[idx_linha, "OBS"])
-                atualizar_memoria_e_backup(df_mem)
+            lista_mem = [dict(r) for r in obter_df_agendamentos()]
+            if 0 <= idx_linha < len(lista_mem):
+                lista_mem[idx_linha]["OBS"] = "✅ [CONCLUÍDO] " + str(lista_mem[idx_linha].get("OBS", ""))
+                atualizar_memoria_e_backup(lista_mem)
             enviar_post_sheets({"acao": "concluir", "protocolo": str(proto_item).strip()})
             st.session_state["modo_exclusao_idx"] = None
             st.session_state["modo_edicao_idx"] = None
@@ -900,10 +915,10 @@ with aba_agendamentos:
             st.session_state["aviso_topo_ag"] = ("info", f"✏️ Modo de Edição ativado para **{cli_item}**. Altere os dados no formulário abaixo e clique em **🔄 Relançar Agendamento**.")
 
     def cb_confirmar_exclusao(idx_linha, proto_item, cli_item):
-        df_mem = obter_df_agendamentos().copy()
-        if idx_linha in df_mem.index:
-            df_mem = df_mem.drop(index=idx_linha).reset_index(drop=True)
-            atualizar_memoria_e_backup(df_mem)
+        lista_mem = [dict(r) for r in obter_df_agendamentos()]
+        if 0 <= idx_linha < len(lista_mem):
+            lista_mem.pop(idx_linha)
+            atualizar_memoria_e_backup(lista_mem)
         enviar_post_sheets({"acao": "excluir", "protocolo": str(proto_item).strip()})
         st.session_state["modo_exclusao_idx"] = None
         st.session_state["aviso_topo_ag"] = ("sucesso", f"🗑️ Agendamento de **{cli_item}** excluído com sucesso!")
@@ -931,23 +946,25 @@ with aba_agendamentos:
         data_fmt = data_escolhida.strftime("%d/%m/%Y")
         obs_final_planilha = f"({nome_val}) {obs_limpa}" if obs_limpa else f"({nome_val})"
 
-        df_mem = obter_df_agendamentos().copy()
+        lista_mem = [dict(r) for r in obter_df_agendamentos()]
         idx_em_edicao = st.session_state.get("modo_edicao_idx")
         proto_antigo = st.session_state.get("modo_edicao_proto_original")
 
-        if idx_em_edicao is not None:
-            if idx_em_edicao in df_mem.index:
-                df_mem.loc[idx_em_edicao, ["DATA", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"]] = [
-                    data_fmt, cli_val, proto_val, cid_val, obs_final_planilha
-                ]
-            else:
-                novo_reg = pd.DataFrame([{
-                    "DATA": data_fmt, "CLIENTE": cli_val, "PROTOCOLO": proto_val,
-                    "CIDADE": cid_val, "OBS": obs_final_planilha
-                }])
-                df_mem = pd.concat([df_mem, novo_reg], ignore_index=True)
+        novo_reg = {
+            "DATA": data_fmt,
+            "CLIENTE": cli_val,
+            "PROTOCOLO": proto_val,
+            "CIDADE": cid_val,
+            "OBS": obs_final_planilha
+        }
 
-            atualizar_memoria_e_backup(df_mem)
+        if idx_em_edicao is not None:
+            if 0 <= idx_em_edicao < len(lista_mem):
+                lista_mem[idx_em_edicao] = novo_reg
+            else:
+                lista_mem.append(novo_reg)
+
+            atualizar_memoria_e_backup(lista_mem)
             enviar_post_sheets({
                 "acao": "editar",
                 "protocolo_antigo": str(proto_antigo or proto_val).strip(),
@@ -962,17 +979,13 @@ with aba_agendamentos:
             st.session_state["modo_edicao_proto_original"] = None
             st.session_state["aviso_topo_ag"] = ("sucesso", f"✅ Agendamento de **{cli_val}** atualizado e relançado para **{data_fmt}**!")
         else:
-            ja_existe = (df_mem["PROTOCOLO"].astype(str).str.strip() == proto_val).any()
+            ja_existe = any(str(r.get("PROTOCOLO", "")).strip() == proto_val for r in lista_mem)
             if ja_existe:
                 st.session_state["aviso_topo_ag"] = ("aviso", f"⚠️ O protocolo **{proto_val}** já consta na lista! Use a opção '✏️ Editar' se quiser alterá-lo.")
                 return
 
-            novo_reg = pd.DataFrame([{
-                "DATA": data_fmt, "CLIENTE": cli_val, "PROTOCOLO": proto_val,
-                "CIDADE": cid_val, "OBS": obs_final_planilha
-            }])
-            df_mem = pd.concat([df_mem, novo_reg], ignore_index=True)
-            atualizar_memoria_e_backup(df_mem)
+            lista_mem.append(novo_reg)
+            atualizar_memoria_e_backup(lista_mem)
 
             enviar_post_sheets({
                 "data": data_fmt,
@@ -1018,17 +1031,25 @@ with aba_agendamentos:
         else:
             st.info(texto_av)
 
-    df_agend = obter_df_agendamentos().copy()
+    lista_agend = obter_df_agendamentos()
 
-    if not df_agend.empty:
-        df_agend["DATA_REAL"] = df_agend.apply(extrair_data_da_linha, axis=1)
-        df_ativos = df_agend[~df_agend["OBS"].astype(str).str.contains("CONCLUÍDO", case=False, na=False)]
-        
-        df_amanha = df_ativos[df_ativos["DATA_REAL"] == data_amanha_str]
-        df_outros_dias = df_ativos[df_ativos["DATA_REAL"] != data_amanha_str]
+    if lista_agend:
+        itens_amanha = []
+        itens_outros_dias = []
+        for idx, row in enumerate(lista_agend):
+            obs_str = str(row.get("OBS", ""))
+            if "CONCLUÍDO" in obs_str.upper():
+                continue
+            data_real = extrair_data_da_linha(row)
+            copia_row = dict(row)
+            copia_row["DATA_REAL"] = data_real
+            if data_real == data_amanha_str:
+                itens_amanha.append((idx, copia_row))
+            else:
+                itens_outros_dias.append((idx, copia_row))
 
-        def renderizar_lista_agendamentos(dataframe_sub, prefixo):
-            for idx, row in dataframe_sub.iterrows():
+        def renderizar_lista_agendamentos(lista_pares, prefixo):
+            for idx, row in lista_pares:
                 proto_item = limpar_protocolo_str(row.get('PROTOCOLO', ''))
                 cidade_item = str(row.get('CIDADE', 'N/D'))
                 cliente_item = str(row.get('CLIENTE', 'N/D'))
@@ -1048,9 +1069,9 @@ with aba_agendamentos:
                         st.markdown(
                             f"""
                             <div style="border-left: 5px solid {cor_barra}; background-color: {bg_card}; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px;">
-                                <strong>🗓️ Data: {data_item} &nbsp;|&nbsp; 🏙️ Cidade: {cidade_item}</strong><br>
-                                👤 <strong>Cliente:</strong> {cliente_item} &nbsp;|&nbsp; 🔢 <strong>Protocolo:</strong> {proto_item}<br>
-                                📝 <strong>Obs:</strong> {obs_item}
+                                <strong>🗓️ Data: {html.escape(data_item)} &nbsp;|&nbsp; 🏙️ Cidade: {html.escape(cidade_item)}</strong><br>
+                                👤 <strong>Cliente:</strong> {html.escape(cliente_item)} &nbsp;|&nbsp; 🔢 <strong>Protocolo:</strong> {html.escape(proto_item)}<br>
+                                📝 <strong>Obs:</strong> {html.escape(obs_item)}
                             </div>
                             """,
                             unsafe_allow_html=True
@@ -1065,7 +1086,6 @@ with aba_agendamentos:
                             args=(chave_select, idx, proto_item, data_item, cliente_item, cidade_item, obs_item)
                         )
 
-                # Aparece exclusivamente para o cartão (idx) clicado
                 if st.session_state.get("modo_exclusao_idx") == idx:
                     st.warning(f"⚠️ **Tem certeza** que deseja excluir o agendamento de **{cliente_item}** (Protocolo: {proto_item})?")
                     col_sim, col_nao, _ = st.columns([1, 1, 2])
@@ -1084,30 +1104,53 @@ with aba_agendamentos:
                             on_click=cb_cancelar_exclusao
                         )
 
-        if not df_amanha.empty:
-            st.success(f"📌 Existem **{len(df_amanha)}** atendimento(s) agendado(s) para amanhã ({data_amanha_str}):")
-            renderizar_lista_agendamentos(df_amanha, "ama")
+        if itens_amanha:
+            st.success(f"📌 Existem **{len(itens_amanha)}** atendimento(s) agendado(s) para amanhã ({data_amanha_str}):")
+            renderizar_lista_agendamentos(itens_amanha, "ama")
         else:
             st.info(f"✅ Nenhum agendamento pendente para amanhã ({data_amanha_str}).")
 
-        if not df_outros_dias.empty:
-            with st.expander(f"📅 Ver Agendamentos de Outras Datas ({len(df_outros_dias)})", expanded=True):
-                renderizar_lista_agendamentos(df_outros_dias, "out")
+        if itens_outros_dias:
+            with st.expander(f"📅 Ver Agendamentos de Outras Datas ({len(itens_outros_dias)})", expanded=True):
+                renderizar_lista_agendamentos(itens_outros_dias, "out")
     else:
         st.info("✅ Nenhum agendamento pendente registado até ao momento.")
 
     with st.expander("📊 Ver Tabela Completa da Planilha (Incluindo Concluídos)"):
-        if not df_agend.empty:
-            colunas_exibir = [c for c in ["DATA", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"] if c in df_agend.columns]
-            st.dataframe(df_agend[colunas_exibir], use_container_width=True)
+        if lista_agend:
+            linhas_html = ""
+            for r in lista_agend:
+                linhas_html += (
+                    f"<tr>"
+                    f"<td style='padding:6px; border-bottom:1px solid #ddd;'>{html.escape(str(r.get('DATA', '')))}</td>"
+                    f"<td style='padding:6px; border-bottom:1px solid #ddd;'>{html.escape(str(r.get('CLIENTE', '')))}</td>"
+                    f"<td style='padding:6px; border-bottom:1px solid #ddd;'>{html.escape(str(r.get('PROTOCOLO', '')))}</td>"
+                    f"<td style='padding:6px; border-bottom:1px solid #ddd;'>{html.escape(str(r.get('CIDADE', '')))}</td>"
+                    f"<td style='padding:6px; border-bottom:1px solid #ddd;'>{html.escape(str(r.get('OBS', '')))}</td>"
+                    f"</tr>"
+                )
+            tabela_html = f"""
+            <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                    <thead>
+                        <tr style="background-color:#f0f2f6; text-align:left;">
+                            <th style="padding:6px; border-bottom:2px solid #ccc;">DATA</th>
+                            <th style="padding:6px; border-bottom:2px solid #ccc;">CLIENTE</th>
+                            <th style="padding:6px; border-bottom:2px solid #ccc;">PROTOCOLO</th>
+                            <th style="padding:6px; border-bottom:2px solid #ccc;">CIDADE</th>
+                            <th style="padding:6px; border-bottom:2px solid #ccc;">OBS</th>
+                        </tr>
+                    </thead>
+                    <tbody>{linhas_html}</tbody>
+                </table>
+            </div>
+            """
+            st.markdown(tabela_html, unsafe_allow_html=True)
         else:
             st.write("Ainda não há agendamentos na planilha.")
 
     st.markdown("---")
 
-    # ==========================================================================
-    # ESPAÇO ÚNICO DE PREENCHIMENTO (NOVO AGENDAMENTO OU EDIÇÃO COM RELANÇAR)
-    # ==========================================================================
     idx_editando = st.session_state.get("modo_edicao_idx")
     proto_orig = st.session_state.get("modo_edicao_proto_original")
     if idx_editando is not None:
