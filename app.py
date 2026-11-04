@@ -3,7 +3,7 @@ import webbrowser
 import time
 import re
 import pandas as pd
-import openpyxl
+import openpyxl # type: ignore
 import os
 import json
 import urllib.parse
