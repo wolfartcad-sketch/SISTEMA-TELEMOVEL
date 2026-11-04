@@ -22,14 +22,13 @@ else:
 # ==============================================================================
 # CONFIGURAÇÃO DA PLANILHA DE AGENDAMENTOS (GOOGLE SHEETS)
 # ==============================================================================
-URL_PLANILHA_AGENDAMENTOS_CSV = "https://docs.google.com/spreadsheets/d/1jXUw3oZKRPRXV53YCoqBxHUZN95igzpRN_r7yAhhoTk/export?format=csv"
-GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyw3jBYk7_FUYZuhzP9fNR7cvp12liyzF7hTwu8N8yqA4ul59brVHtyGg5Mz7WKwbNZ/exec"
+SHEET_ID_AGENDAMENTOS = "1jXUw3oZKRPRXV53YCoqBxHUZN95igzpRN_r7yAhhoTk"
+URL_PLANILHA_AGENDAMENTOS_CSV = f"https://docs.google.com/spreadsheets/d/{SHEET_ID_AGENDAMENTOS}/gviz/tq?tqx=out:csv"
+GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyaSys2BNpDUVeM74BPvDxmseMYo2L57LnaZspAYIhBZ-qpaXIArbEqrvp_Cb1IhigF/exec"
 ARQUIVO_AGENDAMENTOS_LOCAL = "agendamentos_backup.csv"
 
-# Configuração de página alterada para centrado e com limite elegante
 st.set_page_config(page_title="Sistema de Atendimento - FibraWer", layout="centered")
 
-# CSS base global otimizado
 st.markdown(
     """
     <style>
@@ -50,7 +49,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Cabeçalho unificado com margem superior segura para evitar qualquer corte visual
 st.markdown(
     """
     <div style="margin-top: 10px; margin-bottom: 15px;">
@@ -145,9 +143,10 @@ lista_servicos_amigo_global = [
     "VISTORIA TÉCNICA / VIABILIDADE TÉCNICA"
 ]
 
-# Função global para renderizar Selectbox com borda reativa (Vermelho se "Escolher...", Verde se preenchido)
 def selectbox_com_borda_dinamica(label, opcoes, chave):
-    valor_atual = st.session_state.get(chave, "Escolher...")
+    if chave not in st.session_state:
+        st.session_state[chave] = opcoes[0]
+    valor_atual = st.session_state.get(chave, opcoes[0])
     esta_preenchido = valor_atual != "Escolher..."
     
     cor_borda = "#2e7d32" if esta_preenchido else "#ff4b4b"
@@ -167,54 +166,84 @@ def selectbox_com_borda_dinamica(label, opcoes, chave):
     
     return st.selectbox(label, opcoes, key=chave, label_visibility="collapsed")
 
-# --- FUNÇÕES DE LEITURA E GRAVAÇÃO DE AGENDAMENTOS (5 COLUNAS: NOME, CLIENTE, PROTOCOLO, CIDADE, OBS) ---
-def carregar_agendamentos():
-    colunas_padrao = ["NOME", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"]
+def limpar_protocolo_str(val):
+    texto = str(val or "").strip()
+    if texto.endswith(".0"):
+        texto = texto[:-2]
+    return texto
+
+def normalizar_df_agendamentos(df):
+    colunas_padrao = ["DATA", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"]
+    if df is None or df.empty:
+        return pd.DataFrame(columns=colunas_padrao)
+    df.columns = [str(c).strip().upper() for c in df.columns]
+    if "DATA" not in df.columns and "NOME" in df.columns:
+        df = df.rename(columns={"NOME": "DATA"})
+    for col in colunas_padrao:
+        if col not in df.columns:
+            df[col] = ""
+    df = df[colunas_padrao].fillna("")
+    for col in colunas_padrao:
+        df[col] = df[col].astype(str).str.strip()
+    df["PROTOCOLO"] = df["PROTOCOLO"].apply(limpar_protocolo_str)
+    df = df[(df["CLIENTE"] != "") | (df["PROTOCOLO"] != "")]
+    return df.reset_index(drop=True)
+
+def buscar_agendamentos_remoto():
+    colunas_padrao = ["DATA", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"]
     try:
-        url_com_cache_buster = f"{URL_PLANILHA_AGENDAMENTOS_CSV}&t={int(time.time())}"
-        df = pd.read_csv(url_com_cache_buster)
-        df.columns = [str(c).strip().upper() for c in df.columns]
-        if not df.empty:
-            return df
+        url_csv = f"{URL_PLANILHA_AGENDAMENTOS_CSV}&t={int(time.time())}"
+        df = pd.read_csv(url_csv, dtype=str).fillna("")
+        df = normalizar_df_agendamentos(df)
+        df.to_csv(ARQUIVO_AGENDAMENTOS_LOCAL, index=False)
+        return df
     except Exception:
-        pass
-    
-    if os.path.exists(ARQUIVO_AGENDAMENTOS_LOCAL):
-        try:
-            df_local = pd.read_csv(ARQUIVO_AGENDAMENTOS_LOCAL)
-            df_local.columns = [str(c).strip().upper() for c in df_local.columns]
-            return df_local
-        except Exception:
-            pass
+        if os.path.exists(ARQUIVO_AGENDAMENTOS_LOCAL):
+            try:
+                df_local = pd.read_csv(ARQUIVO_AGENDAMENTOS_LOCAL, dtype=str).fillna("")
+                return normalizar_df_agendamentos(df_local)
+            except Exception:
+                pass
     return pd.DataFrame(columns=colunas_padrao)
 
-def salvar_agendamento(dados):
-    # Salva no Backup Local CSV com as 5 colunas exatas
-    df_atual = carregar_agendamentos()
-    novo_df = pd.DataFrame([{
-        "NOME": dados["nome"],
-        "CLIENTE": dados["cliente"],
-        "PROTOCOLO": dados["protocolo"],
-        "CIDADE": dados["cidade"],
-        "OBS": dados["obs"]
-    }])
-    df_final = pd.concat([df_atual, novo_df], ignore_index=True)
-    df_final.to_csv(ARQUIVO_AGENDAMENTOS_LOCAL, index=False)
+def obter_df_agendamentos():
+    if "df_agendamentos_mem" not in st.session_state:
+        st.session_state["df_agendamentos_mem"] = buscar_agendamentos_remoto()
+    return st.session_state["df_agendamentos_mem"]
 
-    # Envia para o Google Sheets via Apps Script
-    if GOOGLE_SCRIPT_URL.strip():
-        try:
-            req = urllib.request.Request(
-                GOOGLE_SCRIPT_URL.strip(),
-                data=json.dumps(dados).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST"
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                return True, "Agendamento salvo na Planilha do Google Sheets!"
-        except Exception as e:
-            return True, f"Salvo localmente (Aviso Google Sheets: {e})"
-    return True, "Salvo localmente!"
+def atualizar_memoria_e_backup(df_novo):
+    df_limpo = normalizar_df_agendamentos(df_novo)
+    st.session_state["df_agendamentos_mem"] = df_limpo
+    try:
+        df_limpo.to_csv(ARQUIVO_AGENDAMENTOS_LOCAL, index=False)
+    except Exception:
+        pass
+
+def enviar_post_sheets(payload):
+    if not GOOGLE_SCRIPT_URL.strip():
+        return False, "URL do Apps Script não configurada."
+    try:
+        req = urllib.request.Request(
+            GOOGLE_SCRIPT_URL.strip(),
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return True, "Sincronizado com a Planilha Google!"
+    except Exception as e:
+        return False, f"Aviso Google Sheets: {e}"
+
+def extrair_data_da_linha(row):
+    val_data = str(row.get("DATA", "")).strip()
+    if re.search(r"\d{2}/\d{2}/\d{4}", val_data):
+        m = re.search(r"(\d{2}/\d{2}/\d{4})", val_data)
+        return m.group(1)
+    val_obs = str(row.get("OBS", ""))
+    match = re.search(r"(\d{2}/\d{2}/\d{4})", val_obs)
+    if match:
+        return match.group(1)
+    return val_data
 
 # --- CRIAÇÃO DAS ABAS PRINCIPAIS ---
 if IS_CLOUD:
@@ -335,7 +364,7 @@ if aba_gestao is not None:
 
             try:
                 m = int(re.sub(r'\D', '', str(metragem_str)))
-            except:
+            except Exception:
                 m = 0
             
             if "BATIDA" in s or "BATIMENTO" in s:
@@ -416,7 +445,7 @@ if aba_gestao is not None:
                     if col_proto == proto_limpo and col_serv == serv_limpo:
                         return True, row
                 return False, 0
-            except Exception as e:
+            except Exception:
                 return False, 0
 
         def conferir_na_planilha_local(caminho_arquivo, termo):
@@ -793,60 +822,306 @@ Obs: {obs_gen}"""
         st.link_button("📲 Enviar diretamente para o WhatsApp", link_whatsapp)
 
 # ==========================================
-# ABA 3: CENTRAL DE AGENDAMENTOS (NOME, CLIENTE, PROTOCOLO, CIDADE, OBS)
+# ABA 3: CENTRAL DE AGENDAMENTOS (PC & SMARTPHONE)
 # ==========================================
 with aba_agendamentos:
-    data_amanha_dt = datetime.now() + timedelta(days=1)
+    data_amanha_dt = (datetime.now() + timedelta(days=1)).date()
     data_amanha_str = data_amanha_dt.strftime("%d/%m/%Y")
 
-    st.subheader(f"🔔 Agendamentos para Amanhã ({data_amanha_str})")
-    
-    df_agend = carregar_agendamentos()
-    if not df_agend.empty and "OBS" in df_agend.columns:
-        df_amanha = df_agend[
-            df_agend.apply(lambda r: data_amanha_str in str(r.values), axis=1)
-        ]
+    # Inicialização segura de todas as variáveis de estado ANTES dos componentes
+    if "ag_data" not in st.session_state:
+        st.session_state["ag_data"] = data_amanha_dt
+    if "ag_nome" not in st.session_state:
+        st.session_state["ag_nome"] = ""
+    if "ag_cliente" not in st.session_state:
+        st.session_state["ag_cliente"] = ""
+    if "ag_protocolo" not in st.session_state:
+        st.session_state["ag_protocolo"] = ""
+    if "ag_cidade" not in st.session_state:
+        st.session_state["ag_cidade"] = "Escolher..."
+    if "ag_obs" not in st.session_state:
+        st.session_state["ag_obs"] = ""
+    if "modo_edicao_idx" not in st.session_state:
+        st.session_state["modo_edicao_idx"] = None
+    if "modo_edicao_proto_original" not in st.session_state:
+        st.session_state["modo_edicao_proto_original"] = None
+    if "modo_exclusao_idx" not in st.session_state:
+        st.session_state["modo_exclusao_idx"] = None
+    if "aviso_topo_ag" not in st.session_state:
+        st.session_state["aviso_topo_ag"] = None
+
+    # --- CALLBACKS DE INTERAÇÃO POR ÍNDICE ÚNICO (idx) ---
+    def cb_acao_card(chave_select, idx_linha, proto_item, data_item, cli_item, cid_item, obs_item):
+        acao = st.session_state.get(chave_select, "Ações...")
+        st.session_state[chave_select] = "Ações..."
+
+        if acao == "✅ Concluído":
+            df_mem = obter_df_agendamentos().copy()
+            if idx_linha in df_mem.index:
+                df_mem.loc[idx_linha, "OBS"] = "✅ [CONCLUÍDO] " + str(df_mem.loc[idx_linha, "OBS"])
+                atualizar_memoria_e_backup(df_mem)
+            enviar_post_sheets({"acao": "concluir", "protocolo": str(proto_item).strip()})
+            st.session_state["modo_exclusao_idx"] = None
+            st.session_state["modo_edicao_idx"] = None
+            st.session_state["aviso_topo_ag"] = ("sucesso", f"✅ Atendimento de **{cli_item}** marcado como CONCLUÍDO (verde na planilha)!")
+
+        elif acao == "🗑️ Excluir":
+            st.session_state["modo_exclusao_idx"] = idx_linha
+            st.session_state["modo_edicao_idx"] = None
+
+        elif acao == "✏️ Editar":
+            st.session_state["modo_edicao_idx"] = idx_linha
+            st.session_state["modo_edicao_proto_original"] = str(proto_item).strip()
+            st.session_state["modo_exclusao_idx"] = None
+
+            try:
+                st.session_state["ag_data"] = datetime.strptime(data_item, "%d/%m/%Y").date()
+            except Exception:
+                st.session_state["ag_data"] = data_amanha_dt
+
+            match_nome = re.match(r"^\((.*?)\)\s*(.*)", str(obs_item).strip(), flags=re.DOTALL)
+            if match_nome:
+                st.session_state["ag_nome"] = match_nome.group(1).strip()
+                st.session_state["ag_obs"] = match_nome.group(2).strip()
+            else:
+                if not st.session_state.get("ag_nome"):
+                    st.session_state["ag_nome"] = "MARCIA"
+                st.session_state["ag_obs"] = str(obs_item).strip()
+
+            st.session_state["ag_cliente"] = str(cli_item).strip()
+            st.session_state["ag_protocolo"] = str(proto_item).strip()
+            st.session_state["ag_cidade"] = cid_item if cid_item in lista_cidades_assertec else "Escolher..."
+            st.session_state["aviso_topo_ag"] = ("info", f"✏️ Modo de Edição ativado para **{cli_item}**. Altere os dados no formulário abaixo e clique em **🔄 Relançar Agendamento**.")
+
+    def cb_confirmar_exclusao(idx_linha, proto_item, cli_item):
+        df_mem = obter_df_agendamentos().copy()
+        if idx_linha in df_mem.index:
+            df_mem = df_mem.drop(index=idx_linha).reset_index(drop=True)
+            atualizar_memoria_e_backup(df_mem)
+        enviar_post_sheets({"acao": "excluir", "protocolo": str(proto_item).strip()})
+        st.session_state["modo_exclusao_idx"] = None
+        st.session_state["aviso_topo_ag"] = ("sucesso", f"🗑️ Agendamento de **{cli_item}** excluído com sucesso!")
+
+    def cb_cancelar_exclusao():
+        st.session_state["modo_exclusao_idx"] = None
+
+    def cb_cancelar_edicao():
+        st.session_state["modo_edicao_idx"] = None
+        st.session_state["modo_edicao_proto_original"] = None
+        st.session_state["ag_cliente"] = ""
+        st.session_state["ag_protocolo"] = ""
+        st.session_state["ag_obs"] = ""
+        st.session_state["ag_cidade"] = "Escolher..."
+        st.session_state["aviso_topo_ag"] = None
+
+    def cb_salvar_ou_relancar():
+        data_escolhida = st.session_state.get("ag_data", data_amanha_dt)
+        nome_val = st.session_state.get("ag_nome", "").strip().upper()
+        cli_val = st.session_state.get("ag_cliente", "").strip().upper()
+        proto_val = limpar_protocolo_str(st.session_state.get("ag_protocolo", ""))
+        cid_val = st.session_state.get("ag_cidade", "Escolher...")
+        obs_limpa = st.session_state.get("ag_obs", "").strip()
+
+        data_fmt = data_escolhida.strftime("%d/%m/%Y")
+        obs_final_planilha = f"({nome_val}) {obs_limpa}" if obs_limpa else f"({nome_val})"
+
+        df_mem = obter_df_agendamentos().copy()
+        idx_em_edicao = st.session_state.get("modo_edicao_idx")
+        proto_antigo = st.session_state.get("modo_edicao_proto_original")
+
+        if idx_em_edicao is not None:
+            if idx_em_edicao in df_mem.index:
+                df_mem.loc[idx_em_edicao, ["DATA", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"]] = [
+                    data_fmt, cli_val, proto_val, cid_val, obs_final_planilha
+                ]
+            else:
+                novo_reg = pd.DataFrame([{
+                    "DATA": data_fmt, "CLIENTE": cli_val, "PROTOCOLO": proto_val,
+                    "CIDADE": cid_val, "OBS": obs_final_planilha
+                }])
+                df_mem = pd.concat([df_mem, novo_reg], ignore_index=True)
+
+            atualizar_memoria_e_backup(df_mem)
+            enviar_post_sheets({
+                "acao": "editar",
+                "protocolo_antigo": str(proto_antigo or proto_val).strip(),
+                "data": data_fmt,
+                "nome": data_fmt,
+                "cliente": cli_val,
+                "protocolo": proto_val,
+                "cidade": cid_val,
+                "obs": obs_final_planilha
+            })
+            st.session_state["modo_edicao_idx"] = None
+            st.session_state["modo_edicao_proto_original"] = None
+            st.session_state["aviso_topo_ag"] = ("sucesso", f"✅ Agendamento de **{cli_val}** atualizado e relançado para **{data_fmt}**!")
+        else:
+            ja_existe = (df_mem["PROTOCOLO"].astype(str).str.strip() == proto_val).any()
+            if ja_existe:
+                st.session_state["aviso_topo_ag"] = ("aviso", f"⚠️ O protocolo **{proto_val}** já consta na lista! Use a opção '✏️ Editar' se quiser alterá-lo.")
+                return
+
+            novo_reg = pd.DataFrame([{
+                "DATA": data_fmt, "CLIENTE": cli_val, "PROTOCOLO": proto_val,
+                "CIDADE": cid_val, "OBS": obs_final_planilha
+            }])
+            df_mem = pd.concat([df_mem, novo_reg], ignore_index=True)
+            atualizar_memoria_e_backup(df_mem)
+
+            enviar_post_sheets({
+                "data": data_fmt,
+                "nome": data_fmt,
+                "cliente": cli_val,
+                "protocolo": proto_val,
+                "cidade": cid_val,
+                "obs": obs_final_planilha
+            })
+            st.session_state["aviso_topo_ag"] = ("sucesso", f"✅ Agendamento de **{cli_val}** para o dia **{data_fmt}** salvo na planilha!")
+
+        st.session_state["msg_agendamento_gerada"] = f"""📅 *AGENDAMENTO ({data_fmt})*
+👤 *Agendado por:* {nome_val}
+🏠 *Cliente:* {cli_val}
+🔢 *Protocolo:* {proto_val}
+🏙️ *Cidade:* {cid_val}
+📝 *Obs:* {obs_limpa or 'Nenhuma'}"""
+
+        st.session_state["ag_cliente"] = ""
+        st.session_state["ag_protocolo"] = ""
+        st.session_state["ag_obs"] = ""
+        st.session_state["ag_cidade"] = "Escolher..."
+
+    def cb_sincronizar_planilha():
+        st.session_state["df_agendamentos_mem"] = buscar_agendamentos_remoto()
+        st.session_state["modo_exclusao_idx"] = None
+        st.session_state["modo_edicao_idx"] = None
+        st.session_state["aviso_topo_ag"] = ("sucesso", "🔄 Lista sincronizada com a Planilha Google!")
+
+    # --- TOPO DA ABA DE AGENDAMENTOS ---
+    col_tit_ag, col_sync_ag = st.columns([3, 1])
+    with col_tit_ag:
+        st.subheader(f"🔔 Agendamentos para Amanhã ({data_amanha_str})")
+    with col_sync_ag:
+        st.button("🔄 Atualizar", on_click=cb_sincronizar_planilha, key="btn_sync_sheets")
+
+    if st.session_state.get("aviso_topo_ag"):
+        tipo_av, texto_av = st.session_state["aviso_topo_ag"]
+        if tipo_av == "sucesso":
+            st.success(texto_av)
+        elif tipo_av == "aviso":
+            st.warning(texto_av)
+        else:
+            st.info(texto_av)
+
+    df_agend = obter_df_agendamentos().copy()
+
+    if not df_agend.empty:
+        df_agend["DATA_REAL"] = df_agend.apply(extrair_data_da_linha, axis=1)
+        df_ativos = df_agend[~df_agend["OBS"].astype(str).str.contains("CONCLUÍDO", case=False, na=False)]
+        
+        df_amanha = df_ativos[df_ativos["DATA_REAL"] == data_amanha_str]
+        df_outros_dias = df_ativos[df_ativos["DATA_REAL"] != data_amanha_str]
+
+        def renderizar_lista_agendamentos(dataframe_sub, prefixo):
+            for idx, row in dataframe_sub.iterrows():
+                proto_item = limpar_protocolo_str(row.get('PROTOCOLO', ''))
+                cidade_item = str(row.get('CIDADE', 'N/D'))
+                cliente_item = str(row.get('CLIENTE', 'N/D'))
+                obs_item = str(row.get('OBS', '-'))
+                data_item = str(row.get('DATA_REAL', 'N/D'))
+                chave_select = f"acao_sel_{prefixo}_{idx}"
+
+                if chave_select not in st.session_state:
+                    st.session_state[chave_select] = "Ações..."
+
+                cor_barra = "#2e7d32" if prefixo == "ama" else "#1976d2"
+                bg_card = "rgba(46, 125, 50, 0.06)" if prefixo == "ama" else "rgba(25, 118, 210, 0.05)"
+
+                with st.container():
+                    col_info, col_menu = st.columns([2.8, 1.2])
+                    with col_info:
+                        st.markdown(
+                            f"""
+                            <div style="border-left: 5px solid {cor_barra}; background-color: {bg_card}; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px;">
+                                <strong>🗓️ Data: {data_item} &nbsp;|&nbsp; 🏙️ Cidade: {cidade_item}</strong><br>
+                                👤 <strong>Cliente:</strong> {cliente_item} &nbsp;|&nbsp; 🔢 <strong>Protocolo:</strong> {proto_item}<br>
+                                📝 <strong>Obs:</strong> {obs_item}
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+                    with col_menu:
+                        st.selectbox(
+                            "Interagir",
+                            ["Ações...", "✅ Concluído", "✏️ Editar", "🗑️ Excluir"],
+                            key=chave_select,
+                            label_visibility="collapsed",
+                            on_change=cb_acao_card,
+                            args=(chave_select, idx, proto_item, data_item, cliente_item, cidade_item, obs_item)
+                        )
+
+                # Aparece exclusivamente para o cartão (idx) clicado
+                if st.session_state.get("modo_exclusao_idx") == idx:
+                    st.warning(f"⚠️ **Tem certeza** que deseja excluir o agendamento de **{cliente_item}** (Protocolo: {proto_item})?")
+                    col_sim, col_nao, _ = st.columns([1, 1, 2])
+                    with col_sim:
+                        st.button(
+                            "Sim",
+                            key=f"btn_sim_exc_{prefixo}_{idx}",
+                            on_click=cb_confirmar_exclusao,
+                            args=(idx, proto_item, cliente_item),
+                            type="primary"
+                        )
+                    with col_nao:
+                        st.button(
+                            "Não",
+                            key=f"btn_nao_exc_{prefixo}_{idx}",
+                            on_click=cb_cancelar_exclusao
+                        )
+
         if not df_amanha.empty:
             st.success(f"📌 Existem **{len(df_amanha)}** atendimento(s) agendado(s) para amanhã ({data_amanha_str}):")
-            for idx, row in df_amanha.iterrows():
-                with st.container():
-                    st.markdown(
-                        f"""
-                        <div style="border-left: 5px solid #2e7d32; background-color: rgba(46, 125, 50, 0.06); padding: 10px 14px; border-radius: 6px; margin-bottom: 8px;">
-                            <strong>🏙️ Cidade: {row.get('CIDADE', 'N/D')} &nbsp;|&nbsp; 👤 Registado por: {row.get('NOME', 'N/D')}</strong><br>
-                            👤 <strong>Cliente:</strong> {row.get('CLIENTE', 'N/D')} &nbsp;|&nbsp; 🔢 <strong>Protocolo:</strong> {row.get('PROTOCOLO', 'N/D')}<br>
-                            📝 <strong>Obs / Data:</strong> {row.get('OBS', '-')}
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
+            renderizar_lista_agendamentos(df_amanha, "ama")
         else:
-            st.info(f"✅ Nenhum agendamento registado para amanhã ({data_amanha_str}) até ao momento.")
-    else:
-        st.info(f"✅ Nenhum agendamento registado para amanhã ({data_amanha_str}) até ao momento.")
+            st.info(f"✅ Nenhum agendamento pendente para amanhã ({data_amanha_str}).")
 
-    with st.expander("📆 Ver Todos os Agendamentos da Planilha"):
+        if not df_outros_dias.empty:
+            with st.expander(f"📅 Ver Agendamentos de Outras Datas ({len(df_outros_dias)})", expanded=True):
+                renderizar_lista_agendamentos(df_outros_dias, "out")
+    else:
+        st.info("✅ Nenhum agendamento pendente registado até ao momento.")
+
+    with st.expander("📊 Ver Tabela Completa da Planilha (Incluindo Concluídos)"):
         if not df_agend.empty:
-            st.dataframe(df_agend, use_container_width=True)
+            colunas_exibir = [c for c in ["DATA", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"] if c in df_agend.columns]
+            st.dataframe(df_agend[colunas_exibir], use_container_width=True)
         else:
             st.write("Ainda não há agendamentos na planilha.")
 
     st.markdown("---")
-    st.subheader("📝 Novo Agendamento")
-    st.markdown("Preencha os campos obrigatórios para gravar na planilha e gerar a mensagem para o grupo do WhatsApp.")
+
+    # ==========================================================================
+    # ESPAÇO ÚNICO DE PREENCHIMENTO (NOVO AGENDAMENTO OU EDIÇÃO COM RELANÇAR)
+    # ==========================================================================
+    idx_editando = st.session_state.get("modo_edicao_idx")
+    proto_orig = st.session_state.get("modo_edicao_proto_original")
+    if idx_editando is not None:
+        st.subheader(f"✏️ Editando Agendamento (Protocolo: {proto_orig})")
+        st.markdown("Altere os campos desejados abaixo e clique em **🔄 Relançar Agendamento**.")
+    else:
+        st.subheader("📝 Novo Agendamento")
+        st.markdown("Preencha os campos obrigatórios para gravar na planilha e gerar a mensagem para o grupo do WhatsApp.")
 
     col_data, col_nome = st.columns(2)
     with col_data:
-        data_escolhida = st.date_input("Data do Agendamento *", value=data_amanha_dt, format="DD/MM/YYYY", key="ag_data")
+        data_escolhida = st.date_input("Data do Agendamento *", format="DD/MM/YYYY", key="ag_data")
     with col_nome:
-        nome_ag = st.text_input("Nome (Quem agendou / Técnico) *", placeholder="EX: MAIARA / MARCIO", key="ag_nome")
+        nome_ag = st.text_input("Nome (Quem agendou) *", placeholder="EX: MARCIA / MAIARA", key="ag_nome")
 
-    cliente_ag = st.text_input("Cliente (Agendamento) *", placeholder="EX: JOÃO DA SILVA", key="ag_cliente")
+    cliente_ag = st.text_input("Cliente (Agendamento) *", placeholder="EX: TIO NENI", key="ag_cliente")
     protocolo_ag = st.text_input("Protocolo (Agendamento) *", placeholder="EX: 2129988", key="ag_protocolo")
     cidade_ag = selectbox_com_borda_dinamica("Cidade *", ["Escolher..."] + lista_cidades_assertec, "ag_cidade")
-    obs_ag = st.text_area("Observações (Turno, Endereço, Detalhes)", placeholder="EX: Manhã - Rua das Flores, 123 - Ligar antes", key="ag_obs")
+    obs_ag = st.text_area("Observações (Turno, Endereço, Detalhes)", placeholder="EX: Manhã - Ligar antes...", key="ag_obs")
 
-    # Validação visual dos campos obrigatórios (Vermelho se vazio, Verde se preenchido)
     nome_ag_ok = nome_ag.strip() != ""
     cli_ag_ok = cliente_ag.strip() != ""
     proto_ag_ok = protocolo_ag.strip() != ""
@@ -858,7 +1133,7 @@ with aba_agendamentos:
 
     st.markdown(f"""
         <style>
-        input[aria-label="Nome (Quem agendou / Técnico) *"] {{
+        input[aria-label="Nome (Quem agendou) *"] {{
             border: 2px solid {cor_nome_ag} !important;
         }}
         input[aria-label="Cliente (Agendamento) *"] {{
@@ -872,35 +1147,33 @@ with aba_agendamentos:
 
     agendamento_valido = nome_ag_ok and cli_ag_ok and proto_ag_ok and cid_ag_ok
 
-    if agendamento_valido:
-        if st.button("💾 Salvar na Planilha e Gerar Mensagem"):
-            data_fmt = data_escolhida.strftime("%d/%m/%Y")
-            obs_final_planilha = f"[{data_fmt}] {obs_ag.strip()}" if obs_ag.strip() else f"[{data_fmt}]"
-            
-            dados_novo_ag = {
-                "nome": nome_ag.strip().upper(),
-                "cliente": cliente_ag.strip().upper(),
-                "protocolo": protocolo_ag.strip(),
-                "cidade": cidade_ag,
-                "obs": obs_final_planilha
-            }
-            
-            ok, msg_retorno = salvar_agendamento(dados_novo_ag)
-            if ok:
-                st.success(f"✅ {msg_retorno}")
-
-            msg_whatsapp_ag = f"""📅 *AGENDAMENTO ({data_fmt})*
-👤 *Nome:* {nome_ag.strip().upper()}
-🏠 *Cliente:* {cliente_ag.strip().upper()}
-🔢 *Protocolo:* {protocolo_ag.strip()}
-🏙️ *Cidade:* {cidade_ag}
-📝 *Obs:* {obs_ag.strip() or 'Nenhuma'}"""
-            st.session_state["msg_agendamento_gerada"] = msg_whatsapp_ag
+    if idx_editando is not None:
+        col_btn_rel, col_btn_canc = st.columns(2)
+        with col_btn_rel:
+            if agendamento_valido:
+                st.button(
+                    "🔄 Relançar Agendamento",
+                    key="btn_relancar_agendamento",
+                    on_click=cb_salvar_ou_relancar,
+                    type="primary"
+                )
+            else:
+                st.warning("⚠️ Preencha os campos obrigatórios.")
+        with col_btn_canc:
+            st.button("❌ Cancelar Edição", key="btn_cancelar_edicao", on_click=cb_cancelar_edicao)
     else:
-        st.warning("⚠️ Preencha todos os campos obrigatórios (em vermelho) para liberar o registo do agendamento.")
+        if agendamento_valido:
+            st.button(
+                "💾 Salvar na Planilha e Gerar Mensagem",
+                key="btn_salvar_agendamento",
+                on_click=cb_salvar_ou_relancar,
+                type="primary"
+            )
+        else:
+            st.warning("⚠️ Preencha todos os campos obrigatórios (em vermelho) para liberar o registo do agendamento.")
 
     if "msg_agendamento_gerada" in st.session_state and st.session_state["msg_agendamento_gerada"]:
-        st.markdown("### 📋 Mensagem de Agendamento Pronta:")
+        st.markdown("### 📋 Mensagem Gerada:")
         st.code(st.session_state["msg_agendamento_gerada"], language="text")
         
         msg_ag_url = urllib.parse.quote(st.session_state["msg_agendamento_gerada"])
