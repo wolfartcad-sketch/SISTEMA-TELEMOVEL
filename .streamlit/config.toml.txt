@@ -3,5 +3,5 @@ headless = true
 enableCORS = false
 enableXsrfProtection = true
 
-[runner]
-magicEnabled = true
+[general]
+pythonVersion = "3.11"
