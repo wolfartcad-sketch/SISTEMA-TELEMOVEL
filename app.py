@@ -189,11 +189,13 @@ def normalizar_df_agendamentos(df):
     df = df[(df["CLIENTE"] != "") | (df["PROTOCOLO"] != "")]
     return df.reset_index(drop=True)
 
-def buscar_agendamentos_remoto():
+def def buscar_agendamentos_remoto():
     colunas_padrao = ["DATA", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"]
     try:
         url_csv = f"{URL_PLANILHA_AGENDAMENTOS_CSV}&t={int(time.time())}"
-        df = pd.read_csv(url_csv, dtype=str).fillna("")
+        req = urllib.request.Request(url_csv, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            df = pd.read_csv(resp, dtype=str).fillna("")
         df = normalizar_df_agendamentos(df)
         df.to_csv(ARQUIVO_AGENDAMENTOS_LOCAL, index=False)
         return df
