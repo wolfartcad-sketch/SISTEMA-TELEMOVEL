@@ -848,7 +848,9 @@ with aba_agendamentos:
         if acao == "✅ Concluído":
             lista_mem = [dict(r) for r in obter_df_agendamentos()]
             if 0 <= idx_linha < len(lista_mem):
-                lista_mem[idx_linha]["OBS"] = "✅ [CONCLUÍDO] " + str(lista_mem[idx_linha].get("OBS", ""))
+                obs_atual = str(lista_mem[idx_linha].get("OBS", ""))
+                if "CONCLUÍDO" not in obs_atual.upper():
+                    lista_mem[idx_linha]["OBS"] = "✅ [CONCLUÍDO] " + obs_atual
                 atualizar_memoria_e_backup(lista_mem)
             enviar_post_sheets({"acao": "concluir", "protocolo": str(proto_item).strip()})
             st.session_state["modo_exclusao_idx"] = None
@@ -1017,7 +1019,7 @@ with aba_agendamentos:
         itens_outros_dias = []
         for idx, row in enumerate(lista_agend):
             obs_str = str(row.get("OBS", ""))
-            if "CONCLUÍDO" in obs_str.upper():
+            if "CONCLUÍDO" in obs_str.upper() or "CONCLUIDO" in obs_str.upper():
                 continue
             data_real = extrair_data_da_linha(row)
             copia_row = dict(row)
@@ -1095,27 +1097,51 @@ with aba_agendamentos:
     else:
         st.info("✅ Nenhum agendamento pendente registado até ao momento.")
 
+    def concluido_expirado_10_dias(row, data_hoje):
+        obs_str = str(row.get("OBS", "")).upper()
+        if "CONCLUÍDO" not in obs_str and "CONCLUIDO" not in obs_str:
+            return False
+        data_str = extrair_data_da_linha(row)
+        try:
+            data_dt = datetime.strptime(data_str, "%d/%m/%Y").date()
+            if (data_hoje - data_dt).days > 10:
+                return True
+        except Exception:
+            pass
+        return False
+
     with st.expander("📊 Ver Tabela Completa da Planilha (Incluindo Concluídos)"):
-        if lista_agend:
+        hoje_dt = datetime.now().date()
+        lista_tabela = [
+            r for r in lista_agend
+            if not concluido_expirado_10_dias(r, hoje_dt)
+        ]
+        if lista_tabela:
             linhas_html = ""
-            for r in lista_agend:
+            for r in lista_tabela:
+                obs_texto = str(r.get("OBS", ""))
+                data_exibicao = extrair_data_da_linha(r)
+                eh_concluido = "CONCLUÍDO" in obs_texto.upper() or "CONCLUIDO" in obs_texto.upper()
+                estilo_celula = (
+                    "padding:6px; border-bottom:1px solid #c3e6cb; background-color:#d4edda !important; color:#155724 !important; font-weight:600;"
+                    if eh_concluido else
+                    "padding:6px; border-bottom:1px solid #ddd; background-color:#ffffff; color:#262730;"
+                )
                 linhas_html += (
                     f"<tr>"
-                    f"<td style='padding:6px; border-bottom:1px solid #ddd;'>{html.escape(str(r.get('DATA', '')))}</td>"
-                    f"<td style='padding:6px; border-bottom:1px solid #ddd;'>{html.escape(str(r.get('CLIENTE', '')))}</td>"
-                    f"<td style='padding:6px; border-bottom:1px solid #ddd;'>{html.escape(str(r.get('PROTOCOLO', '')))}</td>"
-                    f"<td style='padding:6px; border-bottom:1px solid #ddd;'>{html.escape(str(r.get('CIDADE', '')))}</td>"
-                    f"<td style='padding:6px; border-bottom:1px solid #ddd;'>{html.escape(str(r.get('OBS', '')))}</td>"
+                    f"<td style='{estilo_celula}'>{html.escape(str(data_exibicao))}</td>"
+                    f"<td style='{estilo_celula}'>{html.escape(str(r.get('CLIENTE', '')))}</td>"
+                    f"<td style='{estilo_celula}'>{html.escape(str(r.get('CIDADE', '')))}</td>"
+                    f"<td style='{estilo_celula}'>{html.escape(obs_texto)}</td>"
                     f"</tr>"
                 )
             tabela_html = f"""
             <div style="overflow-x:auto;">
                 <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
                     <thead>
-                        <tr style="background-color:#f0f2f6; text-align:left;">
+                        <tr style="background-color:#f0f2f6; color:#262730; text-align:left;">
                             <th style="padding:6px; border-bottom:2px solid #ccc;">DATA</th>
                             <th style="padding:6px; border-bottom:2px solid #ccc;">CLIENTE</th>
-                            <th style="padding:6px; border-bottom:2px solid #ccc;">PROTOCOLO</th>
                             <th style="padding:6px; border-bottom:2px solid #ccc;">CIDADE</th>
                             <th style="padding:6px; border-bottom:2px solid #ccc;">OBS</th>
                         </tr>
