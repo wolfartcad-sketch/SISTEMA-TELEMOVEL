@@ -10,14 +10,22 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
 
-IS_CLOUD = os.path.exists("/mount/src")
+IS_CLOUD = os.path.exists("/mount/src") or os.environ.get("STREAMLIT_RUNTIME_ENV") == "cloud"
 
 if not IS_CLOUD:
-    import pandas as pd
-    import webbrowser
-    import openpyxl
-    import pyautogui
-    import pyperclip
+    try:
+        import pandas as pd
+        import webbrowser
+        import openpyxl
+        import pyautogui
+        import pyperclip
+    except ImportError:
+        IS_CLOUD = True
+        pd = None
+        webbrowser = None
+        openpyxl = None
+        pyautogui = None
+        pyperclip = None
 else:
     pd = None
     webbrowser = None
@@ -218,7 +226,7 @@ def buscar_agendamentos_remoto():
     try:
         url_csv = f"{URL_PLANILHA_AGENDAMENTOS_CSV}&t={int(time.time())}"
         req = urllib.request.Request(url_csv, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=3) as resp:
+        with urllib.request.urlopen(req, timeout=4) as resp:
             conteudo_csv = resp.read().decode("utf-8", errors="replace")
         lista = ler_csv_texto(conteudo_csv)
         salvar_backup_csv(lista)
@@ -719,122 +727,80 @@ if aba_gestao is not None:
 # ==========================================
 with aba_gerador:
     st.subheader("📱 Gerador de Mensagem Padronizada para WhatsApp")
-    st.markdown("Selecione a empresa e preencha todos os campos obrigatórios para liberar a geração da mensagem.")
+    st.markdown("Selecione a empresa e preencha os campos obrigatórios para gerar a mensagem.")
 
     opcoes_empresa = ["Escolher...", "ASSERTEC", "AMIGO"]
     empresa_gen = selectbox_com_borda_dinamica("Empresa / Tipo *", opcoes_empresa, "gen_empresa")
 
-    campos_preenchidos = False
-
     if empresa_gen != "Escolher...":
-        if empresa_gen == "ASSERTEC":
-            st.error("🚨 **Atenção: Preencha todos os campos obrigatórios em destaque abaixo.**")
-            
+        with st.form(f"form_gerador_{empresa_gen}", clear_on_submit=False):
+            st.caption("Preencha os campos abaixo e toque em Gerar Mensagem Pronta:")
             tec_opcoes = ["Escolher...", "ANDERSON", "MARCIO"]
-            tecnico_selecionado = selectbox_com_borda_dinamica("Técnico Responsável *", tec_opcoes, "gen_tecnico_assertec")
-            
             cidades_opcoes = ["Escolher..."] + lista_cidades_assertec
-            cidade_gen = selectbox_com_borda_dinamica("Cidade *", cidades_opcoes, "gen_cidade_assertec")
-            
-            servicos_opcoes = lista_servicos_assertec_global 
-            servico_gen = selectbox_com_borda_dinamica("Serviço Realizado *", servicos_opcoes, "gen_servico_assertec")
-            
-            cliente_gen = st.text_input("Nome do Cliente *", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="gen_cliente_assertec")
-            protocolo_gen = st.text_input("Número do Protocolo *", placeholder="EX: 114619", key="gen_protocolo_assertec")
-            metragem_gen = st.number_input("Metragem / Quantidade", min_value=0, value=1, step=1, key="gen_metragem_assertec")
-            
+
+            if empresa_gen == "ASSERTEC":
+                tecnico_selecionado = st.selectbox("Técnico Responsável *", tec_opcoes, key="gen_tecnico_assertec")
+                cidade_gen = st.selectbox("Cidade *", cidades_opcoes, key="gen_cidade_assertec")
+                servico_gen = st.selectbox("Serviço Realizado *", lista_servicos_assertec_global, key="gen_servico_assertec")
+                cliente_gen = st.text_input("Nome do Cliente *", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="gen_cliente_assertec")
+                protocolo_gen = st.text_input("Número do Protocolo *", placeholder="EX: 114619", key="gen_protocolo_assertec")
+                metragem_gen = st.number_input("Metragem / Quantidade", min_value=0, value=1, step=1, key="gen_metragem_assertec")
+                obs_gen = st.text_area("Observações (Opcional)", placeholder="EX: Refeita configurações nos equipamentos...", key="gen_obs_assertec")
+            else:
+                tecnico_selecionado = st.selectbox("Técnico Responsável *", tec_opcoes, key="gen_tecnico_amigo")
+                cidade_gen = st.selectbox("Cidade *", cidades_opcoes, key="gen_cidade_amigo")
+                servico_gen = st.selectbox("Serviço Realizado *", lista_servicos_amigo_global, key="gen_servico_amigo")
+                cliente_gen = st.text_input("Nome do Cliente *", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="gen_cliente_amigo")
+                protocolo_gen = st.text_input("Número do Protocolo *", placeholder="EX: 114619", key="gen_protocolo_amigo")
+                lpu_gen = st.number_input("LPU", min_value=0, value=1, step=1, key="gen_lpu_amigo")
+                metragem_amigo_gen = st.number_input("Metragem / Cabo", min_value=0, value=0, step=1, key="gen_metragem_amigo")
+                km_rodado_gen = 0
+                st.text_input("Quilômetro Rodado (Km)", value="0", disabled=True, key="gen_km_amigo_fixo")
+                obs_gen = st.text_area("Observações (Opcional)", placeholder="EX: Refeita configurações nos equipamentos...", key="gen_obs_amigo")
+
+            clicou_gerar_msg = st.form_submit_button("✨ Gerar Mensagem Pronta", type="primary", use_container_width=True)
+
+        if clicou_gerar_msg:
             t_ok = tecnico_selecionado != "Escolher..."
             c_ok = cidade_gen != "Escolher..."
             s_ok = servico_gen != "Escolher..."
-            cli_ok = cliente_gen.strip() != "" and cliente_gen.strip() != "EX: ELISETE ANTONIA DOS SANTOS"
-            p_ok = protocolo_gen.strip() != "" and protocolo_gen.strip() != "EX: 114619"
-            
-            if t_ok and c_ok and s_ok and cli_ok and p_ok:
-                campos_preenchidos = True
+            cli_ok = cliente_gen.strip() != ""
+            p_ok = protocolo_gen.strip() != ""
 
-        else: # AMIGO
-            st.error("🚨 **Atenção: Preencha todos os campos obrigatórios em destaque abaixo.**")
-            
-            tec_opcoes = ["Escolher...", "ANDERSON", "MARCIO"]
-            tecnico_selecionado = selectbox_com_borda_dinamica("Técnico Responsável *", tec_opcoes, "gen_tecnico_amigo")
-            
-            cidades_opcoes = ["Escolher..."] + lista_cidades_assertec
-            cidade_gen = selectbox_com_borda_dinamica("Cidade *", cidades_opcoes, "gen_cidade_amigo")
-            
-            servicos_opcoes = lista_servicos_amigo_global 
-            servico_gen = selectbox_com_borda_dinamica("Serviço Realizado *", servicos_opcoes, "gen_servico_amigo")
-            
-            cliente_gen = st.text_input("Nome do Cliente *", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="gen_cliente_amigo")
-            protocolo_gen = st.text_input("Número do Protocolo *", placeholder="EX: 114619", key="gen_protocolo_amigo")
-            
-            lpu_gen = st.number_input("LPU", min_value=0, value=1, step=1, key="gen_lpu_amigo")
-            metragem_amigo_gen = st.number_input("Metragem / Cabo", min_value=0, value=0, step=1, key="gen_metragem_amigo")
-            km_rodado_gen = 0
-            st.text_input("Quilômetro Rodado (Km)", value="0", disabled=True, key="gen_km_amigo_fixo")
-            
-            t_ok = tecnico_selecionado != "Escolher..."
-            c_ok = cidade_gen != "Escolher..."
-            s_ok = servico_gen != "Escolher..."
-            cli_ok = cliente_gen.strip() != "" and cliente_gen.strip() != "EX: ELISETE ANTONIA DOS SANTOS"
-            p_ok = protocolo_gen.strip() != "" and protocolo_gen.strip() != "EX: 114619"
-            
-            if t_ok and c_ok and s_ok and cli_ok and p_ok:
-                campos_preenchidos = True
+            if not (t_ok and c_ok and s_ok and cli_ok and p_ok):
+                st.error("⚠️ Preencha todos os campos obrigatórios (*) antes de gerar a mensagem.")
+            else:
+                if tecnico_selecionado == "ANDERSON":
+                    tecnico_gen = "ANDERSON"
+                    nome_tec_completo = "ANDERSON WOLFART MOLLERKE" if empresa_gen == "AMIGO" else "Anderson"
+                else:
+                    tecnico_gen = "MARCIO"
+                    nome_tec_completo = "ANDERSON WOLFART MOLLERKE" if empresa_gen == "AMIGO" else "Márcio"
 
-        cli_valido = cliente_gen.strip() != "" and cliente_gen.strip() != "EX: ELISETE ANTONIA DOS SANTOS"
-        proto_valido = protocolo_gen.strip() != "" and protocolo_gen.strip() != "EX: 114619"
-        
-        col_cli = "#2e7d32" if cli_valido else "#ff4b4b"
-        col_proto = "#2e7d32" if proto_valido else "#ff4b4b"
-
-        st.markdown(f"""
-            <style>
-            input[aria-label="Nome do Cliente *"] {{
-                border: 2px solid {col_cli} !important;
-            }}
-            input[aria-label="Número do Protocolo *"] {{
-                border: 2px solid {col_proto} !important;
-            }}
-            </style>
-        """, unsafe_allow_html=True)
-
-        st.markdown("---")
-        obs_gen = st.text_area("Observações (Opcional)", placeholder="EX: Refeita configurações nos equipamentos...", key="gen_obs")
-
-        if tecnico_selecionado == "ANDERSON":
-            tecnico_gen = "ANDERSON"
-            nome_tec_completo = "ANDERSON WOLFART MOLLERKE" if empresa_gen == "AMIGO" else "Anderson"
-        else:
-            tecnico_gen = "MARCIO"
-            nome_tec_completo = "ANDERSON WOLFART MOLLERKE" if empresa_gen == "AMIGO" else "Márcio"
-
-        if campos_preenchidos:
-            if st.button("✨ Gerar Mensagem Pronta"):
+                obs_texto_limpo = obs_gen.strip()
                 if empresa_gen == "AMIGO":
                     mensagem_gerada = f"""{empresa_gen}
 {tecnico_gen}
 Técnico: {nome_tec_completo}
-Cliente: {cliente_gen.upper()}
-Protocolo: {protocolo_gen}
+Cliente: {cliente_gen.strip().upper()}
+Protocolo: {protocolo_gen.strip()}
 Cidade: {cidade_gen}
 Serviço: {servico_gen}
 LPU: {lpu_gen}
 Metragem: {metragem_amigo_gen}
 Km Rodado: {km_rodado_gen}
-Obs: {obs_gen}"""
+Obs: {obs_texto_limpo}"""
                 else:
                     mensagem_gerada = f"""{empresa_gen}
 {tecnico_gen}
 Técnico: {nome_tec_completo}
-Cliente: {cliente_gen.upper()}
-Protocolo: {protocolo_gen}
+Cliente: {cliente_gen.strip().upper()}
+Protocolo: {protocolo_gen.strip()}
 Cidade: {cidade_gen}
 Serviço: {servico_gen}
 Metragem: {metragem_gen}
-Obs: {obs_gen}"""
+Obs: {obs_texto_limpo}"""
                 st.session_state["mensagem_gerada_final"] = mensagem_gerada
-        else:
-            st.warning("⚠️ Por favor, preencha todos os campos obrigatórios destacados para liberar a geração da mensagem.")
 
     if "mensagem_gerada_final" in st.session_state and st.session_state["mensagem_gerada_final"]:
         st.markdown("### 📋 Mensagem Gerada:")
@@ -842,7 +808,7 @@ Obs: {obs_gen}"""
         
         mensagem_url = urllib.parse.quote(st.session_state["mensagem_gerada_final"])
         link_whatsapp = f"https://wa.me/?text={mensagem_url}"
-        st.link_button("📲 Enviar diretamente para o WhatsApp", link_whatsapp)
+        st.link_button("📲 Enviar diretamente para o WhatsApp", link_whatsapp, use_container_width=True)
 
 # ==========================================
 # ABA 3: CENTRAL DE AGENDAMENTOS (PC & SMARTPHONE)
@@ -871,10 +837,13 @@ with aba_agendamentos:
         st.session_state["modo_exclusao_idx"] = None
     if "aviso_topo_ag" not in st.session_state:
         st.session_state["aviso_topo_ag"] = None
+    if "erro_form_ag" not in st.session_state:
+        st.session_state["erro_form_ag"] = None
 
     def cb_acao_card(chave_select, idx_linha, proto_item, data_item, cli_item, cid_item, obs_item):
         acao = st.session_state.get(chave_select, "Ações...")
         st.session_state[chave_select] = "Ações..."
+        st.session_state["erro_form_ag"] = None
 
         if acao == "✅ Concluído":
             lista_mem = [dict(r) for r in obter_df_agendamentos()]
@@ -902,7 +871,8 @@ with aba_agendamentos:
 
             match_nome = re.match(r"^\((.*?)\)\s*(.*)", str(obs_item).strip(), flags=re.DOTALL)
             if match_nome:
-                st.session_state["ag_nome"] = match_nome.group(1).strip()
+                nome_extraido = re.sub(r"\s+AGENDOU$", "", match_nome.group(1).strip(), flags=re.IGNORECASE).strip()
+                st.session_state["ag_nome"] = nome_extraido
                 st.session_state["ag_obs"] = match_nome.group(2).strip()
             else:
                 if not st.session_state.get("ag_nome"):
@@ -934,17 +904,25 @@ with aba_agendamentos:
         st.session_state["ag_obs"] = ""
         st.session_state["ag_cidade"] = "Escolher..."
         st.session_state["aviso_topo_ag"] = None
+        st.session_state["erro_form_ag"] = None
 
     def cb_salvar_ou_relancar():
         data_escolhida = st.session_state.get("ag_data", data_amanha_dt)
-        nome_val = st.session_state.get("ag_nome", "").strip().upper()
+        nome_bruto = st.session_state.get("ag_nome", "").strip().upper()
+        nome_val = re.sub(r"\s+AGENDOU$", "", nome_bruto, flags=re.IGNORECASE).strip()
         cli_val = st.session_state.get("ag_cliente", "").strip().upper()
         proto_val = limpar_protocolo_str(st.session_state.get("ag_protocolo", ""))
         cid_val = st.session_state.get("ag_cidade", "Escolher...")
         obs_limpa = st.session_state.get("ag_obs", "").strip()
 
+        if not nome_val or not cli_val or not proto_val or cid_val == "Escolher...":
+            st.session_state["erro_form_ag"] = "⚠️ Preencha todos os campos obrigatórios (*): Nome, Cliente, Protocolo e Cidade."
+            return
+
+        st.session_state["erro_form_ag"] = None
         data_fmt = data_escolhida.strftime("%d/%m/%Y")
-        obs_final_planilha = f"({nome_val}) {obs_limpa}" if obs_limpa else f"({nome_val})"
+        prefixo_agendador = f"({nome_val} AGENDOU)"
+        obs_final_planilha = f"{prefixo_agendador} {obs_limpa}" if obs_limpa else prefixo_agendador
 
         lista_mem = [dict(r) for r in obter_df_agendamentos()]
         idx_em_edicao = st.session_state.get("modo_edicao_idx")
@@ -1013,6 +991,7 @@ with aba_agendamentos:
         st.session_state["df_agendamentos_mem"] = buscar_agendamentos_remoto()
         st.session_state["modo_exclusao_idx"] = None
         st.session_state["modo_edicao_idx"] = None
+        st.session_state["erro_form_ag"] = None
         st.session_state["aviso_topo_ag"] = ("sucesso", "🔄 Lista sincronizada com a Planilha Google!")
 
     # --- TOPO DA ABA DE AGENDAMENTOS ---
@@ -1160,66 +1139,43 @@ with aba_agendamentos:
         st.subheader("📝 Novo Agendamento")
         st.markdown("Preencha os campos obrigatórios para gravar na planilha e gerar a mensagem para o grupo do WhatsApp.")
 
-    col_data, col_nome = st.columns(2)
-    with col_data:
-        data_escolhida = st.date_input("Data do Agendamento *", format="DD/MM/YYYY", key="ag_data")
-    with col_nome:
-        nome_ag = st.text_input("Nome (Quem agendou) *", placeholder="EX: MARCIA / MAIARA", key="ag_nome")
+    if st.session_state.get("erro_form_ag"):
+        st.error(st.session_state["erro_form_ag"])
 
-    cliente_ag = st.text_input("Cliente (Agendamento) *", placeholder="EX: TIO NENI", key="ag_cliente")
-    protocolo_ag = st.text_input("Protocolo (Agendamento) *", placeholder="EX: 2129988", key="ag_protocolo")
-    cidade_ag = selectbox_com_borda_dinamica("Cidade *", ["Escolher..."] + lista_cidades_assertec, "ag_cidade")
-    obs_ag = st.text_area("Observações (Turno, Endereço, Detalhes)", placeholder="EX: Manhã - Ligar antes...", key="ag_obs")
+    with st.form("form_agendamento", clear_on_submit=False):
+        col_data, col_nome = st.columns(2)
+        with col_data:
+            st.date_input("Data do Agendamento *", format="DD/MM/YYYY", key="ag_data")
+        with col_nome:
+            st.text_input("Nome (Quem agendou) *", placeholder="EX: JOAO / MARCIA / MAIARA", key="ag_nome")
 
-    nome_ag_ok = nome_ag.strip() != ""
-    cli_ag_ok = cliente_ag.strip() != ""
-    proto_ag_ok = protocolo_ag.strip() != ""
-    cid_ag_ok = cidade_ag != "Escolher..."
+        st.text_input("Cliente (Agendamento) *", placeholder="EX: TIO NENI", key="ag_cliente")
+        st.text_input("Protocolo (Agendamento) *", placeholder="EX: 2129988", key="ag_protocolo")
+        st.selectbox("Cidade *", ["Escolher..."] + lista_cidades_assertec, key="ag_cidade")
+        st.text_area("Observações (Turno, Endereço, Detalhes)", placeholder="EX: Manhã - Ligar antes...", key="ag_obs")
 
-    cor_nome_ag = "#2e7d32" if nome_ag_ok else "#ff4b4b"
-    cor_cli_ag = "#2e7d32" if cli_ag_ok else "#ff4b4b"
-    cor_proto_ag = "#2e7d32" if proto_ag_ok else "#ff4b4b"
-
-    st.markdown(f"""
-        <style>
-        input[aria-label="Nome (Quem agendou) *"] {{
-            border: 2px solid {cor_nome_ag} !important;
-        }}
-        input[aria-label="Cliente (Agendamento) *"] {{
-            border: 2px solid {cor_cli_ag} !important;
-        }}
-        input[aria-label="Protocolo (Agendamento) *"] {{
-            border: 2px solid {cor_proto_ag} !important;
-        }}
-        </style>
-    """, unsafe_allow_html=True)
-
-    agendamento_valido = nome_ag_ok and cli_ag_ok and proto_ag_ok and cid_ag_ok
-
-    if idx_editando is not None:
-        col_btn_rel, col_btn_canc = st.columns(2)
-        with col_btn_rel:
-            if agendamento_valido:
-                st.button(
+        if idx_editando is not None:
+            col_btn_rel, col_btn_canc = st.columns(2)
+            with col_btn_rel:
+                st.form_submit_button(
                     "🔄 Relançar Agendamento",
-                    key="btn_relancar_agendamento",
                     on_click=cb_salvar_ou_relancar,
-                    type="primary"
+                    type="primary",
+                    use_container_width=True
                 )
-            else:
-                st.warning("⚠️ Preencha os campos obrigatórios.")
-        with col_btn_canc:
-            st.button("❌ Cancelar Edição", key="btn_cancelar_edicao", on_click=cb_cancelar_edicao)
-    else:
-        if agendamento_valido:
-            st.button(
-                "💾 Salvar na Planilha e Gerar Mensagem",
-                key="btn_salvar_agendamento",
-                on_click=cb_salvar_ou_relancar,
-                type="primary"
-            )
+            with col_btn_canc:
+                st.form_submit_button(
+                    "❌ Cancelar Edição",
+                    on_click=cb_cancelar_edicao,
+                    use_container_width=True
+                )
         else:
-            st.warning("⚠️ Preencha todos os campos obrigatórios (em vermelho) para liberar o registo do agendamento.")
+            st.form_submit_button(
+                "💾 Salvar na Planilha e Gerar Mensagem",
+                on_click=cb_salvar_ou_relancar,
+                type="primary",
+                use_container_width=True
+            )
 
     if "msg_agendamento_gerada" in st.session_state and st.session_state["msg_agendamento_gerada"]:
         st.markdown("### 📋 Mensagem Gerada:")
@@ -1227,4 +1183,4 @@ with aba_agendamentos:
         
         msg_ag_url = urllib.parse.quote(st.session_state["msg_agendamento_gerada"])
         link_wpp_ag = f"https://wa.me/?text={msg_ag_url}"
-        st.link_button("📲 Enviar para o Grupo do WhatsApp", link_wpp_ag)
+        st.link_button("📲 Enviar para o Grupo do WhatsApp", link_wpp_ag, use_container_width=True)
