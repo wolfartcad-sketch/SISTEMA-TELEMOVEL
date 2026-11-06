@@ -66,48 +66,6 @@ st.markdown(
         margin-top: 0.2rem !important;
         margin-bottom: 0.2rem !important;
     }
-    /* Caixa do serviço selecionado com altura de 2 linhas e sem cortar texto com '...' */
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
-        min-height: 3.4rem !important;
-        height: auto !important;
-        padding-top: 6px !important;
-        padding-bottom: 6px !important;
-        align-items: center !important;
-    }
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div > div:first-child {
-        white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: unset !important;
-        height: auto !important;
-        max-width: calc(100% - 24px) !important;
-        display: block !important;
-    }
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div > div:first-child > div,
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] span,
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] div {
-        white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: unset !important;
-        word-break: break-word !important;
-        line-height: 1.25 !important;
-        font-size: 0.78rem !important;
-        height: auto !important;
-        max-height: none !important;
-    }
-    /* Opções da lista aberta com quebra de linha para leitura completa no telemóvel */
-    div[data-baseweb="popover"] li,
-    div[data-baseweb="popover"] div[role="option"],
-    ul[role="listbox"] li,
-    div[role="listbox"] div[role="option"] {
-        font-size: 0.78rem !important;
-        white-space: normal !important;
-        word-break: break-word !important;
-        line-height: 1.25 !important;
-        height: auto !important;
-        min-height: 2.6rem !important;
-        padding-top: 8px !important;
-        padding-bottom: 8px !important;
-    }
     </style>
     """,
     unsafe_allow_html=True
@@ -124,7 +82,7 @@ st.markdown(
 )
 
 # ==============================================================================
-# LISTAS OFICIAIS DE CIDADES, SERVIÇOS E REGRAS DE ROTEAMENTO
+# LISTAS OFICIAIS DE CIDADES, SERVIÇOS E NOMES CURTOS (MÁX 27 CARACTERES)
 # ==============================================================================
 lista_cidades_assertec = [
     "Alto Feliz", "Bom Principio", "Caxias do Sul", "Feliz", "Harmonia", "Ivoti", 
@@ -132,7 +90,7 @@ lista_cidades_assertec = [
     "São Sebastião do Caí", "São Vendelino", "Tupandi", "Vale Real"
 ]
 
-# Serviços que existem no Portal Brasil TecPar (AMIGO / AVATO)
+# Serviços que existem no Portal Brasil TecPar (AMIGO / AVATO) - Nomes Oficiais
 SERVICOS_PORTAL_TECPAR = [
     "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
     "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (301 ~ 500MT)",
@@ -152,32 +110,61 @@ SERVICOS_PORTAL_TECPAR = [
     "VISTORIA TÉCNICA / VIABILIDADE TÉCNICA"
 ]
 
-# Serviços exclusivos da Assertec (Manutenções, Rompimentos, Improdutivas, Plantão, etc.)
-SERVICOS_EXCLUSIVOS_ASSERTEC = [
-    "Atendimento Presencial - REPARO",
-    "Atendimento Presencial - REPARO - ROMPIMENTO/LANÇAMENTO até 500 mt",
-    "Atendimento presencial - RNC",
-    "Visita improdutiva",
-    "Desativações de serviços completa",
-    "Desativações de serviços parcial / troca de endereço / migração de tecnologia",
-    "Km rodado acima de 50km",
-    "Metragem excedente (acima de 500 mt)",
-    "Fusão em caixa",
-    "Emenda de cabos rompidos na rede em infraestrutura própria",
-    "Instalação de nova CTO",
-    "Lançamento de cabo AS",
-    "PLANTAO - duplo",
-    "PLANTAO - simples",
-    "PLANTAO - Atendimento Presencial - REPARO",
-    "PLANTAO - Atendimento Presencial - REPARO - ROMPIMENTO/LANÇAMENTO até 500 mt"
-]
+# Mapa de Nomes Curtos para Telemóvel (Máximo 25 caracteres incluindo emoji) -> Nome Oficial Original
+MAPA_SERVICOS_CURTOS = {
+    # ⚡ Serviços AMIGO + ASSERTEC
+    "⚡ INSTALAÇÃO (0 A 300M)": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+    "⚡ INSTALAÇÃO (301 A 500M)": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (301 ~ 500MT)",
+    "⚡ INSTALAÇÃO (+ DE 500M)": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (ACIMA DE 500MT)",
+    "⚡ INSTALAÇÃO (VIA RÁDIO)": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (RÁDIO)",
+    "⚡ AGREGADO PONTO EXTRA": "ATIVAÇÃO DE SERVIÇO AGREGADO (WIFI/TV/FONE/PONTO EXTRA)",
+    "⚡ AGREGADO CÂMERA WIFI": "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS WIFI)",
+    "⚡ AGREGADO CÂMERAS CABO": "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS)",
+    "⚡ AVULSO PONTO EXTRA": "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (WIFI/TV/FONE/PONTO EXTRA)",
+    "⚡ AVULSO CÂMERA WIFI": "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (CÂMERAS WIFI)",
+    "⚡ BATIDA CTO 1X16": "BATIMENTO DE CAIXA 1X16 PORTAS",
+    "⚡ BATIDA CTO 1X8": "BATIMENTO DE CAIXA 1X8 PORTAS",
+    "⚡ DESATIVAÇÃO DE SERVIÇO": "DESATIVAÇÃO DE SERVIÇO",
+    "⚡ DIÁRIA (DUPLA)": "DIÁRIAS (SOB DEMANDA - DUPLA)",
+    "⚡ FIBRA AVULSA ATÉ 12V": "LANÇAMENTO DE FIBRA AVULSA ATÉ - FIBRA ATÉ 12V",
+    "⚡ TROCA DE PONTO INTERNO": "TROCA DE PONTO INTERNO (PONTO PRINCIPAL/WIFI/TV/FONE/CÂMERAS/PONTO EXTRA)",
+    "⚡ VISTORIA / VIABILIDADE": "VISTORIA TÉCNICA / VIABILIDADE TÉCNICA",
 
-# Lista Unificada apenas com emoji curto no início: ⚡ = Amigo + Assertec | 🛠️ = Só Assertec
-LISTA_UNIFICADA_TELEMOVEL = (
-    ["Escolher..."]
-    + [f"⚡ {s}" for s in SERVICOS_PORTAL_TECPAR]
-    + [f"🛠️ {s}" for s in SERVICOS_EXCLUSIVOS_ASSERTEC]
-)
+    # 🛠️ Serviços Exclusivos ASSERTEC
+    "🛠️ MANUTENÇÃO / REPARO": "Atendimento Presencial - REPARO",
+    "🛠️ ROMPIMENTO ATÉ 500M": "Atendimento Presencial - REPARO - ROMPIMENTO/LANÇAMENTO até 500 mt",
+    "🛠️ ATENDIMENTO RNC": "Atendimento presencial - RNC",
+    "🛠️ VISITA IMPRODUTIVA": "Visita improdutiva",
+    "🛠️ DESATIVAÇÃO COMPLETA": "Desativações de serviços completa",
+    "🛠️ TROCA DE ENDEREÇO": "Desativações de serviços parcial / troca de endereço / migração de tecnologia",
+    "🛠️ KM ACIMA DE 50KM": "Km rodado acima de 50km",
+    "🛠️ METRAGEM + DE 500M": "Metragem excedente (acima de 500 mt)",
+    "🛠️ FUSÃO EM CAIXA": "Fusão em caixa",
+    "🛠️ EMENDA CABO ROMPIDO": "Emenda de cabos rompidos na rede em infraestrutura própria",
+    "🛠️ NOVA CTO (INSTALAÇÃO)": "Instalação de nova CTO",
+    "🛠️ LANÇAMENTO CABO AS": "Lançamento de cabo AS",
+    "🛠️ PLANTÃO - DUPLO": "PLANTAO - duplo",
+    "🛠️ PLANTÃO - SIMPLES": "PLANTAO - simples",
+    "🛠️ PLANTÃO - REPARO": "PLANTAO - Atendimento Presencial - REPARO",
+    "🛠️ PLANTÃO - ROMPIMENTO": "PLANTAO - Atendimento Presencial - REPARO - ROMPIMENTO/LANÇAMENTO até 500 mt",
+}
+
+MAPA_BATIMENTO_CURTO = {
+    "Não": "Não",
+    "⚡ BATIDA CTO 1X16": "BATIMENTO DE CAIXA 1X16 PORTAS",
+    "⚡ BATIDA CTO 1X8": "BATIMENTO DE CAIXA 1X8 PORTAS",
+}
+
+MAPA_AGREGADO_CURTO = {
+    "Não": "Não",
+    "⚡ AGREGADO PONTO EXTRA": "ATIVAÇÃO DE SERVIÇO AGREGADO (WIFI/TV/FONE/PONTO EXTRA)",
+    "⚡ AGREGADO CÂMERA WIFI": "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS WIFI)",
+    "⚡ AGREGADO CÂMERAS CABO": "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS)",
+    "⚡ AVULSO PONTO EXTRA": "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (WIFI/TV/FONE/PONTO EXTRA)",
+    "⚡ AVULSO CÂMERA WIFI": "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (CÂMERAS WIFI)",
+}
+
+LISTA_UNIFICADA_TELEMOVEL = ["Escolher..."] + list(MAPA_SERVICOS_CURTOS.keys())
 
 lista_servicos_assertec_global = [
     "Escolher...",
@@ -246,19 +233,25 @@ EQUIPAMENTOS_LISTA = [
     "ATA"
 ]
 
-def limpar_prefixo_servico(servico_label):
-    texto = str(servico_label or "").strip()
+def obter_nome_oficial_servico(rotulo_curto):
+    if rotulo_curto in MAPA_SERVICOS_CURTOS:
+        return MAPA_SERVICOS_CURTOS[rotulo_curto]
+    if rotulo_curto in MAPA_BATIMENTO_CURTO:
+        return MAPA_BATIMENTO_CURTO[rotulo_curto]
+    if rotulo_curto in MAPA_AGREGADO_CURTO:
+        return MAPA_AGREGADO_CURTO[rotulo_curto]
+    texto = str(rotulo_curto or "").strip()
     texto = re.sub(r"^(⚡|🛠️)\s*(\[.*?\]\s*)?", "", texto)
     return texto.strip()
 
-def servico_vai_para_amigo(servico_limpo):
-    return servico_limpo.upper() in [s.upper() for s in SERVICOS_PORTAL_TECPAR]
+def servico_vai_para_amigo(servico_oficial):
+    return servico_oficial.upper() in [s.upper() for s in SERVICOS_PORTAL_TECPAR]
 
-def servico_exige_equipamentos(servico_limpo):
-    return "ATIVAÇÃO" in servico_limpo.upper()
+def servico_exige_equipamentos(servico_oficial):
+    return "ATIVAÇÃO" in servico_oficial.upper()
 
-def mapear_para_assertec(servico_limpo, mercado="AMIGO - VAREJO"):
-    s_up = servico_limpo.upper()
+def mapear_para_assertec(servico_oficial, mercado="AMIGO - VAREJO"):
+    s_up = servico_oficial.upper()
     eh_corp = "CORPORATIVO" in mercado.upper() or "AVATO" in mercado.upper()
     if eh_corp:
         for item in lista_servicos_assertec_global:
@@ -282,7 +275,7 @@ def mapear_para_assertec(servico_limpo, mercado="AMIGO - VAREJO"):
         "TROCA DE PONTO INTERNO (PONTO PRINCIPAL/WIFI/TV/FONE/CÂMERAS/PONTO EXTRA)": "Troca de ponto interno (ponto principal/wifi/tv/fone/câmeras/ponto extra)",
         "VISTORIA TÉCNICA / VIABILIDADE TÉCNICA": "Vistoria Técnica/ Viabilidade técnica",
     }
-    return mapa_direto.get(s_up, servico_limpo)
+    return mapa_direto.get(s_up, servico_oficial)
 
 # ==============================================================================
 # ROBÔ DE AUTOMAÇÃO BRASIL TECPAR (AMIGO / AVATO) - 100% AUTOMATIZADO
@@ -315,10 +308,7 @@ def iniciar_browser_playwright(p):
         return p.chromium.launch(headless=True, args=opcoes_args)
 
 def obter_frame_interno_gas(page, timeout_ms=30000):
-    """
-    O Google Apps Script cria dois iframes aninhados: #sandboxFrame (externo) e #userHtmlFrame (interno).
-    Esta função localiza especificamente o #userHtmlFrame onde estão os campos reais do formulário.
-    """
+    """Localiza o iframe interno #userHtmlFrame do Google Apps Script."""
     inicio = time.time()
     while (time.time() - inicio) * 1000 < timeout_ms:
         f_user = page.frame(name="userHtmlFrame")
@@ -339,22 +329,35 @@ def obter_frame_interno_gas(page, timeout_ms=30000):
     return page.frames[-1]
 
 def definir_campo_por_rotulo_js(target_frame, rotulo_busca, valor):
-    """Preenche um input/select/textarea buscando pelo texto do rótulo (label) acima dele."""
+    """
+    Preenche um input/select/textarea VISÍVEL buscando pelo texto do rótulo (label) acima dele.
+    Ignora elementos ocultos (como #lgNome ou filtros superiores quando aplicável).
+    """
     js_code = """
     ([rotulo, val]) => {
+        const isVis = (el) => {
+            if (!el) return false;
+            const st = window.getComputedStyle(el);
+            return st.display !== 'none' && st.visibility !== 'hidden' && st.opacity !== '0' && el.offsetWidth > 0 && el.offsetHeight > 0;
+        };
         const norm = (s) => (s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toUpperCase().trim();
         const alvo = norm(rotulo);
-        const els = Array.from(document.querySelectorAll('label, span, div, th, td, p'));
+        const els = Array.from(document.querySelectorAll('label, span, div, th, td, p')).filter(isVis);
+
         for (const el of els) {
             const txt = norm(el.innerText || el.textContent);
-            if (txt === alvo || (txt.startsWith(alvo) && txt.length < alvo.length + 25)) {
+            if (txt === alvo || (txt.startsWith(alvo) && txt.length < alvo.length + 20)) {
                 let container = el.parentElement;
                 for (let nivel = 0; nivel < 3 && container; nivel++) {
-                    const campo = container.querySelector('input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])');
-                    if (campo) {
+                    const campos = Array.from(
+                        container.querySelectorAll('input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])')
+                    ).filter(isVis);
+                    for (const campo of campos) {
                         if (campo.tagName === 'SELECT') {
                             const opts = Array.from(campo.options);
-                            const opt = opts.find(o => norm(o.text).includes(norm(val)) || norm(o.value).includes(norm(val)));
+                            // Se for MERCADO, ignora o filtro do topo que tem 'Todos'
+                            if (alvo === 'MERCADO' && opts.some(o => norm(o.text) === 'TODOS')) continue;
+                            const opt = opts.find(o => norm(o.text) === norm(val) || norm(o.text).includes(norm(val)) || norm(o.value).includes(norm(val)));
                             if (opt) {
                                 campo.value = opt.value;
                                 campo.dispatchEvent(new Event('change', { bubbles: true }));
@@ -383,6 +386,52 @@ def definir_campo_por_rotulo_js(target_frame, rotulo_busca, valor):
     except Exception:
         return False
 
+def realizar_login_portal_js(target_frame, usuario, senha):
+    """
+    Preenche Usuário e Senha ignorando inputs ocultos (como #lgNome) e clica no botão visível 'Entrar'.
+    """
+    js_login = """
+    ([usr, pwd]) => {
+        const isVis = (el) => {
+            if (!el) return false;
+            const st = window.getComputedStyle(el);
+            return st.display !== 'none' && st.visibility !== 'hidden' && el.offsetWidth > 0 && el.offsetHeight > 0;
+        };
+        const setVal = (inp, v) => {
+            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+            if (setter) setter.call(inp, v);
+            else inp.value = v;
+            inp.dispatchEvent(new Event('input', { bubbles: true }));
+            inp.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+
+        const passInputs = Array.from(document.querySelectorAll('input[type="password"]')).filter(isVis);
+        if (passInputs.length === 0) return false;
+        const passInput = passInputs[0];
+
+        const textInputs = Array.from(
+            document.querySelectorAll('input:not([type="password"]):not([type="hidden"]):not([type="checkbox"]):not([type="radio"])')
+        ).filter(isVis);
+
+        if (textInputs.length > 0) {
+            setVal(textInputs[0], usr);
+        }
+        setVal(passInput, pwd);
+
+        const botoes = Array.from(document.querySelectorAll('button, input[type="submit"], a.btn')).filter(isVis);
+        const btnEntrar = botoes.find(b => (b.innerText || b.value || '').toUpperCase().includes('ENTRAR'));
+        if (btnEntrar) {
+            btnEntrar.click();
+            return true;
+        }
+        return false;
+    }
+    """
+    try:
+        return target_frame.evaluate(js_login, [usuario, senha])
+    except Exception:
+        return False
+
 def executar_lancamento_portal_tecpar(dados_os):
     servicos_amigo = [s for s in dados_os.get("servicos", []) if servico_vai_para_amigo(s["nome"])]
     if not servicos_amigo:
@@ -402,28 +451,38 @@ def executar_lancamento_portal_tecpar(dados_os):
             page = context.new_page()
             page.goto(TECPAR_PORTAL_URL, timeout=60000)
 
-            # Localiza o iframe interno real (#userHtmlFrame) do Google Apps Script
             target_frame = obter_frame_interno_gas(page, timeout_ms=30000)
 
-            # 1. TELA DE LOGIN
-            campo_pass = target_frame.locator("input[type='password']").first
-            if campo_pass.is_visible(timeout=8000):
-                campo_user = target_frame.locator("input:not([type='password']):not([type='hidden'])").first
-                campo_user.fill(TECPAR_USER)
-                campo_pass.fill(TECPAR_PASS)
-                target_frame.get_by_role("button", name=re.compile("Entrar", re.I)).click()
+            # 1. TELA DE LOGIN (Ignora o #lgNome oculto e preenche apenas os campos visíveis de Usuário e Senha)
+            campo_pass_vis = target_frame.locator("input[type='password']:visible").first
+            if campo_pass_vis.is_visible(timeout=8000):
+                fez_login = realizar_login_portal_js(target_frame, TECPAR_USER, TECPAR_PASS)
+                if not fez_login:
+                    campo_user_vis = target_frame.locator("input:visible:not([type='password']):not([type='hidden'])").first
+                    campo_user_vis.fill(TECPAR_USER)
+                    campo_pass_vis.fill(TECPAR_PASS)
+                    target_frame.locator("button:visible", has_text=re.compile("Entrar", re.I)).first.click()
 
             # Aguarda o painel principal carregar após o login (até 30s)
+            painel_carregou = False
             inicio_painel = time.time()
             while (time.time() - inicio_painel) < 30:
                 target_frame = obter_frame_interno_gas(page, timeout_ms=5000)
                 try:
+                    if target_frame.locator("input[placeholder*='12554094']:visible, input[placeholder*='CLIENTE' i]:visible").count() > 0:
+                        painel_carregou = True
+                        break
                     texto_body = target_frame.locator("body").inner_text(timeout=2000).upper()
-                    if "PROTOCOLO" in texto_body and ("CLIENTE" in texto_body or "MERCADO" in texto_body):
+                    if "LANÇAR ATIVIDADE REALIZADA" in texto_body or "NOME DO CLIENTE" in texto_body:
+                        painel_carregou = True
                         break
                 except Exception:
                     pass
                 page.wait_for_timeout(800)
+
+            if not painel_carregou:
+                browser.close()
+                return False, "Não foi possível carregar a tela principal após o login no portal Brasil TecPar."
 
             page.wait_for_timeout(1000)
 
@@ -431,7 +490,7 @@ def executar_lancamento_portal_tecpar(dados_os):
             # Protocolo
             preencheu_proto = False
             try:
-                loc_proto = target_frame.locator("input[placeholder*='12554094'], input[placeholder*='Protocolo' i]").first
+                loc_proto = target_frame.locator("input[placeholder*='12554094']:visible, input[placeholder*='Protocolo' i]:visible").first
                 if loc_proto.is_visible(timeout=3000):
                     loc_proto.fill(str(dados_os["protocolo"]))
                     preencheu_proto = True
@@ -440,28 +499,26 @@ def executar_lancamento_portal_tecpar(dados_os):
             if not preencheu_proto:
                 definir_campo_por_rotulo_js(target_frame, "PROTOCOLO", str(dados_os["protocolo"]))
 
-            # Mercado (AMIGO - VAREJO ou AVATO - CORPORATIVO)
+            # Mercado (AMIGO - VAREJO ou AVATO - CORPORATIVO) - Ignorando o filtro superior
             mercado_escolhido = dados_os.get("mercado", "AMIGO - VAREJO")
-            selecionou_mercado = False
-            selects = target_frame.locator("select")
-            for i in range(selects.count()):
-                sel = selects.nth(i)
-                try:
-                    opcoes_txt = sel.inner_text(timeout=1500)
-                    if "AMIGO - VAREJO" in opcoes_txt:
-                        sel.select_option(label=mercado_escolhido)
-                        selecionou_mercado = True
-                        break
-                except Exception:
-                    pass
+            selecionou_mercado = definir_campo_por_rotulo_js(target_frame, "MERCADO", mercado_escolhido)
             if not selecionou_mercado:
-                definir_campo_por_rotulo_js(target_frame, "MERCADO", mercado_escolhido)
+                selects = target_frame.locator("select:visible")
+                for i in range(selects.count()):
+                    sel = selects.nth(i)
+                    try:
+                        opcoes_txt = sel.inner_text(timeout=1500)
+                        if "AMIGO - VAREJO" in opcoes_txt and "Todos" not in opcoes_txt:
+                            sel.select_option(label=mercado_escolhido)
+                            break
+                    except Exception:
+                        pass
             page.wait_for_timeout(800)
 
             # Nome do Cliente
             preencheu_cli = False
             try:
-                loc_cli = target_frame.locator("input[placeholder*='CLIENTE' i]").first
+                loc_cli = target_frame.locator("input[placeholder*='CLIENTE' i]:visible").first
                 if loc_cli.is_visible(timeout=2000):
                     loc_cli.fill(dados_os["cliente"].upper())
                     preencheu_cli = True
@@ -478,7 +535,7 @@ def executar_lancamento_portal_tecpar(dados_os):
             obs_texto = dados_os.get("obs", "")
             if obs_texto:
                 try:
-                    loc_obs = target_frame.locator("textarea").first
+                    loc_obs = target_frame.locator("textarea:visible").first
                     if loc_obs.is_visible(timeout=2000):
                         loc_obs.fill(obs_texto)
                     else:
@@ -489,7 +546,7 @@ def executar_lancamento_portal_tecpar(dados_os):
             # 3. ADICIONAR SERVIÇOS (PRINCIPAL + BATIMENTO CTO + AGREGADOS)
             for idx, srv in enumerate(servicos_amigo):
                 selecionou_srv = False
-                selects = target_frame.locator("select")
+                selects = target_frame.locator("select:visible")
                 for i in range(selects.count()):
                     sel = selects.nth(i)
                     try:
@@ -513,21 +570,21 @@ def executar_lancamento_portal_tecpar(dados_os):
                 preencheu_cabo = definir_campo_por_rotulo_js(target_frame, "QUANTIDADE DE CABO UTILIZADO", str(cabo_num))
                 if not preencheu_cabo:
                     try:
-                        inp_cabo = target_frame.locator("input[placeholder*='Obrigatório' i], input[placeholder*='Se houver' i]").first
+                        inp_cabo = target_frame.locator("input[placeholder*='Obrigatório' i]:visible, input[placeholder*='Se houver' i]:visible").first
                         if inp_cabo.is_visible(timeout=1500):
                             inp_cabo.fill(str(cabo_num))
                     except Exception:
                         pass
 
                 if idx < len(servicos_amigo) - 1:
-                    target_frame.get_by_role("button", name=re.compile("Adicionar serviço", re.I)).click()
+                    target_frame.locator("button:visible", has_text=re.compile("Adicionar serviço", re.I)).first.click()
                     page.wait_for_timeout(900)
 
             # 4. CLICAR EM "Lançar atividade" -> "Não, lançar agora"
-            target_frame.get_by_role("button", name=re.compile("Lançar atividade", re.I)).click()
+            target_frame.locator("button:visible", has_text=re.compile("Lançar atividade", re.I)).first.click()
             page.wait_for_timeout(1500)
 
-            btn_nao_lancar = target_frame.get_by_role("button", name=re.compile("Não, lançar agora", re.I))
+            btn_nao_lancar = target_frame.locator("button:visible", has_text=re.compile("Não, lançar agora", re.I)).first
             if btn_nao_lancar.is_visible(timeout=5000):
                 btn_nao_lancar.click()
                 page.wait_for_timeout(1500)
@@ -537,22 +594,22 @@ def executar_lancamento_portal_tecpar(dados_os):
             if tem_ativacao:
                 equipamentos_usados = dados_os.get("equipamentos", {})
                 for _ in range(3):
-                    btn_confirmar_eq = target_frame.get_by_role("button", name=re.compile("Confirmar e lançar", re.I))
+                    btn_confirmar_eq = target_frame.locator("button:visible", has_text=re.compile("Confirmar e lançar", re.I)).first
                     if not btn_confirmar_eq.is_visible(timeout=4000):
                         break
 
                     for nome_eq in EQUIPAMENTOS_LISTA:
                         info_eq = equipamentos_usados.get(nome_eq, {"usou": False, "qtd": 0, "tipo": "Novo"})
-                        linha_eq = target_frame.locator("div", has_text=re.compile(f"^{re.escape(nome_eq)}$", re.I)).locator("..")
+                        linha_eq = target_frame.locator("div:visible", has_text=re.compile(f"^{re.escape(nome_eq)}$", re.I)).locator("..")
                         if info_eq.get("usou") and int(info_eq.get("qtd", 0)) > 0:
                             try:
-                                linha_eq.locator("input").first.fill(str(info_eq["qtd"]))
-                                linha_eq.get_by_role("button", name=re.compile(f"^{info_eq['tipo']}$", re.I)).click()
+                                linha_eq.locator("input:visible").first.fill(str(info_eq["qtd"]))
+                                linha_eq.locator("button:visible", has_text=re.compile(f"^{info_eq['tipo']}$", re.I)).first.click()
                             except Exception:
                                 pass
                         else:
                             try:
-                                linha_eq.get_by_role("button", name=re.compile("Não se aplica", re.I)).click()
+                                linha_eq.locator("button:visible", has_text=re.compile("Não se aplica", re.I)).first.click()
                             except Exception:
                                 pass
 
@@ -1132,7 +1189,7 @@ if aba_gestao is not None:
 # ==========================================
 with aba_gerador:
     st.subheader("📱 Lançamento Único de Atendimento")
-    st.caption("Legenda de Serviços:  ⚡ = Lança na Amigo e Assertec   |   🛠️ = Lança só na Assertec")
+    st.caption("Legenda:  ⚡ = Amigo + Assertec   |   🛠️ = Só Assertec")
 
     with st.form("form_lancamento_unico_telemovel", clear_on_submit=False):
         col_t1, col_t2 = st.columns(2)
@@ -1151,7 +1208,7 @@ with aba_gerador:
 
         st.markdown("---")
         st.markdown("**1️⃣ Serviço Principal**")
-        servico_principal_raw = st.selectbox("Serviço Realizado *", LISTA_UNIFICADA_TELEMOVEL, key="uni_servico_principal")
+        servico_principal_curto = st.selectbox("Serviço Realizado *", LISTA_UNIFICADA_TELEMOVEL, key="uni_servico_principal")
 
         col_m1, col_m2 = st.columns(2)
         with col_m1:
@@ -1163,9 +1220,9 @@ with aba_gerador:
         st.markdown("**2️⃣ Serviços Adicionais no Mesmo Protocolo (Opcional)**")
         col_b1, col_b2 = st.columns([2, 1])
         with col_b1:
-            batimento_extra = st.selectbox(
+            batimento_curto = st.selectbox(
                 "Houve Batimento de CTO neste protocolo?",
-                ["Não", "BATIMENTO DE CAIXA 1X16 PORTAS", "BATIMENTO DE CAIXA 1X8 PORTAS"],
+                list(MAPA_BATIMENTO_CURTO.keys()),
                 key="uni_batimento"
             )
         with col_b2:
@@ -1173,16 +1230,9 @@ with aba_gerador:
 
         col_a1, col_a2 = st.columns([2, 1])
         with col_a1:
-            agregado_extra = st.selectbox(
+            agregado_curto = st.selectbox(
                 "Houve Ponto Extra / Agregado neste protocolo?",
-                [
-                    "Não",
-                    "ATIVAÇÃO DE SERVIÇO AGREGADO (WIFI/TV/FONE/PONTO EXTRA)",
-                    "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS WIFI)",
-                    "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS)",
-                    "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (WIFI/TV/FONE/PONTO EXTRA)",
-                    "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (CÂMERAS WIFI)"
-                ],
+                list(MAPA_AGREGADO_CURTO.keys()),
                 key="uni_agregado"
             )
         with col_a2:
@@ -1214,24 +1264,32 @@ with aba_gerador:
     if clicou_lancar_unico:
         t_ok = tecnico_selecionado != "Escolher..."
         c_ok = cidade_gen != "Escolher..."
-        s_ok = servico_principal_raw != "Escolher..."
+        s_ok = servico_principal_curto != "Escolher..."
         cli_ok = cliente_gen.strip() != ""
         p_ok = protocolo_gen.strip() != ""
 
         if not (t_ok and c_ok and s_ok and cli_ok and p_ok):
             st.error("⚠️ Preencha todos os campos obrigatórios (*): Técnico, Cliente, Protocolo, Cidade e Serviço Principal.")
         else:
-            servico_prin_limpo = limpar_prefixo_servico(servico_principal_raw)
-            vai_amigo = servico_vai_para_amigo(servico_prin_limpo) or batimento_extra != "Não" or agregado_extra != "Não"
+            # Converte os nomes curtos do menu suspenso para os nomes oficiais completos
+            servico_prin_oficial = obter_nome_oficial_servico(servico_principal_curto)
+            batimento_oficial = obter_nome_oficial_servico(batimento_curto)
+            agregado_oficial = obter_nome_oficial_servico(agregado_curto)
+
+            vai_amigo = (
+                servico_vai_para_amigo(servico_prin_oficial)
+                or batimento_oficial != "Não"
+                or agregado_oficial != "Não"
+            )
             metragem_valida = max(1, int(metragem_gen or 1))
 
             lista_servicos_os = [
-                {"nome": servico_prin_limpo, "lpu": lpu_principal, "cabo": metragem_valida, "eh_principal": True}
+                {"nome": servico_prin_oficial, "lpu": lpu_principal, "cabo": metragem_valida, "eh_principal": True}
             ]
-            if batimento_extra != "Não":
-                lista_servicos_os.append({"nome": batimento_extra, "lpu": lpu_batimento, "cabo": 1, "eh_principal": False})
-            if agregado_extra != "Não":
-                lista_servicos_os.append({"nome": agregado_extra, "lpu": lpu_agregado, "cabo": 1, "eh_principal": False})
+            if batimento_oficial != "Não":
+                lista_servicos_os.append({"nome": batimento_oficial, "lpu": lpu_batimento, "cabo": 1, "eh_principal": False})
+            if agregado_oficial != "Não":
+                lista_servicos_os.append({"nome": agregado_oficial, "lpu": lpu_agregado, "cabo": 1, "eh_principal": False})
 
             dados_os_atual = {
                 "data": datetime.now().strftime("%d/%m/%Y"),
@@ -1249,7 +1307,7 @@ with aba_gerador:
             salvar_na_fila_assertec(dados_os_atual)
 
             if vai_amigo:
-                with st.spinner("🤖 Lançando automaticamente no portal Brasil TecPar (AMIGO) em nome de Anderson Wolfart..."):
+                with st.spinner("🤖 Fazendo login e lançando automaticamente no portal Brasil TecPar (AMIGO)..."):
                     ok_tecpar, msg_tecpar = executar_lancamento_portal_tecpar(dados_os_atual)
                 if ok_tecpar:
                     st.success(msg_tecpar)
@@ -1258,8 +1316,7 @@ with aba_gerador:
             else:
                 st.info("🛠️ Serviço exclusivo ASSERTEC identificado. Não é necessário lançar no portal AMIGO.")
 
-            # Formato idêntico ao original para funcionar 100% no lançador Assertec do PC
-            # Se houver mais de 1 serviço, gera mensagens completas separadas por 2 linhas em branco
+            # Gera a mensagem WhatsApp com o NOME ORIGINAL OFICIAL do serviço (dupla com 2 linhas em branco se houver mais de 1 serviço)
             nome_tec_assertec = "Anderson" if tecnico_selecionado == "ANDERSON" else "Márcio"
             blocos_mensagens = []
 
@@ -1277,7 +1334,6 @@ Metragem: {metragem_msg}
 Obs: {obs_gen.strip()}"""
                 blocos_mensagens.append(bloco)
 
-            # Une cada mensagem completa com 2 linhas em branco entre elas (\n\n\n)
             st.session_state["mensagem_gerada_final"] = "\n\n\n".join(blocos_mensagens)
 
     if "mensagem_gerada_final" in st.session_state and st.session_state["mensagem_gerada_final"]:
@@ -1285,8 +1341,8 @@ Obs: {obs_gen.strip()}"""
         st.code(st.session_state["mensagem_gerada_final"], language="text")
         
         mensagem_url = urllib.parse.quote(st.session_state["mensagem_gerada_final"])
-        link_whatsapp = f"https://wa.me/?text={mensagem_url}"
-        st.link_button("📲 Enviar diretamente para o WhatsApp", link_whatsapp, use_container_width=True)
+        link_wpp_ag = f"https://wa.me/?text={mensagem_url}"
+        st.link_button("📲 Enviar diretamente para o WhatsApp", link_wpp_ag, use_container_width=True)
 
 # ==========================================
 # ABA 3: CENTRAL DE AGENDAMENTOS (PC & SMARTPHONE)

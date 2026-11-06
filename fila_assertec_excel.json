@@ -1,0 +1,62 @@
+[
+  {
+    "data": "05/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTE AUTOMAÇAO 01",
+    "protocolo": "159753258465",
+    "cidade": "Ivoti",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "TESTE AUTOMAÇAO 01"
+  }
+]
