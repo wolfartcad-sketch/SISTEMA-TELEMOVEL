@@ -1,4 +1,6 @@
 import streamlit as st
+import sys
+import subprocess
 import time
 import re
 import io
@@ -64,6 +66,20 @@ st.markdown(
         margin-top: 0.2rem !important;
         margin-bottom: 0.2rem !important;
     }
+    /* Diminui a fonte e permite quebra de linha nos seletores para telas pequenas de telemóvel */
+    div[data-baseweb="select"] * {
+        font-size: 0.80rem !important;
+        white-space: normal !important;
+        line-height: 1.25 !important;
+    }
+    ul[role="listbox"] li, div[role="listbox"] div[role="option"] {
+        font-size: 0.78rem !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        line-height: 1.25 !important;
+        padding-top: 6px !important;
+        padding-bottom: 6px !important;
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -88,7 +104,7 @@ lista_cidades_assertec = [
     "São Sebastião do Caí", "São Vendelino", "Tupandi", "Vale Real"
 ]
 
-# Serviços que existem no Portal Brasil TecPar (AMIGO / AVATO) - Extraídos da lista oficial do portal
+# Serviços que existem no Portal Brasil TecPar (AMIGO / AVATO)
 SERVICOS_PORTAL_TECPAR = [
     "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
     "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (301 ~ 500MT)",
@@ -128,11 +144,12 @@ SERVICOS_EXCLUSIVOS_ASSERTEC = [
     "PLANTAO - Atendimento Presencial - REPARO - ROMPIMENTO/LANÇAMENTO até 500 mt"
 ]
 
-# Lista Unificada para o Técnico no Telemóvel (Sem precisar escolher Empresa antes)
+# Lista Unificada apenas com emoji curto no início para não cortar na tela do telemóvel:
+# ⚡ = Amigo + Assertec | 🛠️ = Só Assertec
 LISTA_UNIFICADA_TELEMOVEL = (
     ["Escolher..."]
-    + [f"⚡ [AMIGO + ASSERTEC] {s}" for s in SERVICOS_PORTAL_TECPAR]
-    + [f"🛠️ [SÓ ASSERTEC] {s}" for s in SERVICOS_EXCLUSIVOS_ASSERTEC]
+    + [f"⚡ {s}" for s in SERVICOS_PORTAL_TECPAR]
+    + [f"🛠️ {s}" for s in SERVICOS_EXCLUSIVOS_ASSERTEC]
 )
 
 lista_servicos_assertec_global = [
@@ -203,7 +220,9 @@ EQUIPAMENTOS_LISTA = [
 ]
 
 def limpar_prefixo_servico(servico_label):
-    return re.sub(r"^(⚡ \[AMIGO \+ ASSERTEC\]|🛠️ \[SÓ ASSERTEC\])\s*", "", str(servico_label)).strip()
+    texto = str(servico_label or "").strip()
+    texto = re.sub(r"^(⚡|🛠️)\s*(\[.*?\]\s*)?", "", texto)
+    return texto.strip()
 
 def servico_vai_para_amigo(servico_limpo):
     return servico_limpo.upper() in [s.upper() for s in SERVICOS_PORTAL_TECPAR]
@@ -222,6 +241,7 @@ def mapear_para_assertec(servico_limpo, mercado="AMIGO - VAREJO"):
         "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)": "Ativação de Serviço - Acesso à Internet (0 ~ 300 mt)",
         "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (301 ~ 500MT)": "Ativação de Serviço - Acesso à Internet (301 ~ 500 mt)",
         "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (ACIMA DE 500MT)": "Metragem excedente (acima de 500 mt)",
+        "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (RÁDIO)": "Ativação de Serviço - Acesso à Internet (0 ~ 300 mt)",
         "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS WIFI)": "Ativação de Serviço - Agregado (câmeras wifi)",
         "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS)": "Ativação de Serviço - Agregado (câmeras)",
         "ATIVAÇÃO DE SERVIÇO AGREGADO (WIFI/TV/FONE/PONTO EXTRA)": "Ativação de Serviço - Agregado (wifi/tv/fone/ponto extra)",
@@ -240,6 +260,35 @@ def mapear_para_assertec(servico_limpo, mercado="AMIGO - VAREJO"):
 # ==============================================================================
 # ROBÔ DE AUTOMAÇÃO BRASIL TECPAR (AMIGO / AVATO) - 100% AUTOMATIZADO
 # ==============================================================================
+@st.cache_resource(show_spinner=False)
+def garantir_instalacao_chromium():
+    """Garante que o binário do Chromium do Playwright está instalado no Streamlit Cloud."""
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        return True
+    except Exception:
+        return False
+
+def iniciar_browser_playwright(p):
+    """Inicia o navegador Chromium (usa binário do sistema se existir ou baixa automaticamente)."""
+    opcoes_args = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+    for caminho_sis in ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"]:
+        if os.path.exists(caminho_sis):
+            try:
+                return p.chromium.launch(headless=True, executable_path=caminho_sis, args=opcoes_args)
+            except Exception:
+                pass
+    try:
+        return p.chromium.launch(headless=True, args=opcoes_args)
+    except Exception:
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
+        return p.chromium.launch(headless=True, args=opcoes_args)
+
 def executar_lancamento_portal_tecpar(dados_os):
     servicos_amigo = [s for s in dados_os.get("servicos", []) if servico_vai_para_amigo(s["nome"])]
     if not servicos_amigo:
@@ -248,11 +297,13 @@ def executar_lancamento_portal_tecpar(dados_os):
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
-        return False, "Biblioteca Playwright não instalada neste ambiente. Instale com: pip install playwright && playwright install chromium"
+        return False, "Biblioteca Playwright não instalada neste ambiente."
+
+    garantir_instalacao_chromium()
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+            browser = iniciar_browser_playwright(p)
             context = browser.new_context(viewport={"width": 1366, "height": 900})
             page = context.new_page()
             page.goto(TECPAR_PORTAL_URL, timeout=45000)
@@ -272,7 +323,11 @@ def executar_lancamento_portal_tecpar(dados_os):
                     campo_user.fill(TECPAR_USER)
                     campo_pass.fill(TECPAR_PASS)
                     target_frame.get_by_role("button", name=re.compile("Entrar", re.I)).click()
-                    page.wait_for_timeout(4000)
+                    page.wait_for_timeout(4500)
+                    for frame in page.frames:
+                        if "userCodeAppPanel" in frame.url or "googleusercontent" in frame.url:
+                            target_frame = frame
+                            break
             except Exception:
                 pass
 
@@ -318,18 +373,18 @@ def executar_lancamento_portal_tecpar(dados_os):
                         break
                 page.wait_for_timeout(600)
 
-                lpu_val = str(srv.get("lpu", 1))
+                lpu_val = str(max(1, int(srv.get("lpu", 1) or 1)))
                 inputs_num = target_frame.locator("input[type='number']")
                 if inputs_num.count() >= 1:
                     inp_lpu = inputs_num.first
                     if inp_lpu.is_enabled():
                         inp_lpu.fill(lpu_val)
 
-                cabo_val = str(srv.get("cabo", 0))
+                # Metragem na Amigo sempre no mínimo 1 (nunca zero)
+                cabo_num = max(1, int(re.sub(r"\D", "", str(srv.get("cabo", 1))) or 1))
                 inp_cabo = target_frame.get_by_placeholder(re.compile("Obrigatório|Se houver", re.I))
                 if inp_cabo.is_visible():
-                    if int(re.sub(r"\D", "", cabo_val) or 0) > 0 or "ATIVAÇÃO" in srv["nome"].upper():
-                        inp_cabo.fill(cabo_val if int(re.sub(r"\D", "", cabo_val) or 0) > 0 else "1")
+                    inp_cabo.fill(str(cabo_num))
 
                 if idx < len(servicos_amigo) - 1:
                     target_frame.get_by_role("button", name=re.compile("Adicionar serviço", re.I)).click()
@@ -559,7 +614,7 @@ if aba_gestao is not None:
             linhas = [l.strip() for l in texto.strip().split("\n") if l.strip()]
             primeiro_texto = linhas[0].lower() if len(linhas) > 0 else ""
             if "amigo" in primeiro_texto or "tecpar" in primeiro_texto:
-                st.session_state["formulario_escolhido"] = "Brasil TecPar / Amigo + Assertec"
+                st.session_state["formulario_escolhido"] = "Brasil TecPar / Amigo (Apenas Planilha Excel)"
             else:
                 st.session_state["formulario_escolhido"] = "Assertec / Fibrawer"
 
@@ -573,9 +628,8 @@ if aba_gestao is not None:
             st.session_state["proto"] = extrair(r"Protocolo:\s*(.*)", texto)
             st.session_state["cidade"] = extrair(r"Cidade:\s*(.*)", texto)
             
-            raw_servico = extrair(r"Serviço Principal:\s*(.*)|Serviço:\s*(.*)", texto)
+            raw_servico = extrair(r"Serviço:\s*(.*)", texto)
             raw_servico = re.sub(r'ATATIVAÇÃO', 'ATIVAÇÃO', raw_servico, flags=re.IGNORECASE)
-            raw_servico = re.sub(r'\s*\(LPU:.*?\)\s*$', '', raw_servico)
             st.session_state["servico"] = raw_servico
             
             qtd_extraida = extrair(r"Metragem[:]?\s*(.*)|Cabo[:]?\s*(.*)|Qtd[:]?\s*(.*)|Quantidade[:]?\s*(.*)", texto)
@@ -742,124 +796,126 @@ if aba_gestao is not None:
 
         if st.session_state["mensagem_processada"]:
             st.markdown("---")
-            btn_executar = st.button("🚀 Executar Assertec (Formulário Google)", key="btn_exec_ass_topo")
-            if btn_executar:
-                tecnico_val = st.session_state.get("tec", "")
-                cliente_val = st.session_state.get("cli", "")
-                protocolo_val = st.session_state.get("proto", "")
-                cidade_importada = st.session_state.get("cidade", "")
-                servico_importado = mapear_para_assertec(st.session_state.get("servico", ""))
-                quantidade_val = st.session_state.get("qtd", "") if st.session_state.get("qtd", "").strip() else "1"
-                observacao_val = st.session_state.get("obs", "")
-                
-                cidade_idx = 0
-                for idx, c in enumerate(lista_cidades_assertec):
-                    if c.lower() in cidade_importada.lower() and cidade_importada.strip():
-                        cidade_idx = idx
-                        break
-                
-                servico_idx = 0
-                serv_imp_clean = servico_importado.strip().lower()
-                if serv_imp_clean:
-                    for idx, s in enumerate(lista_servicos_assertec_global):
-                        if s.strip().lower() == serv_imp_clean:
-                            servico_idx = idx
+            formulario_escolhido = st.session_state["formulario_escolhido"]
+            if formulario_escolhido == "Assertec / Fibrawer":
+                btn_executar = st.button("🚀 Executar Assertec", key="btn_exec_ass_topo")
+                if btn_executar:
+                    tecnico_val = st.session_state.get("tec", "")
+                    cliente_val = st.session_state.get("cli", "")
+                    protocolo_val = st.session_state.get("proto", "")
+                    cidade_importada = st.session_state.get("cidade", "")
+                    servico_importado = st.session_state.get("servico", "")
+                    quantidade_val = st.session_state.get("qtd", "") if st.session_state.get("qtd", "").strip() else "1"
+                    observacao_val = st.session_state.get("obs", "")
+                    
+                    cidade_idx = 0
+                    for idx, c in enumerate(lista_cidades_assertec):
+                        if c.lower() in cidade_importada.lower() and cidade_importada.strip():
+                            cidade_idx = idx
                             break
-                    if servico_idx == 0:
+                    
+                    servico_idx = 0
+                    serv_imp_clean = servico_importado.strip().lower()
+                    if serv_imp_clean:
                         for idx, s in enumerate(lista_servicos_assertec_global):
-                            if serv_imp_clean in s.strip().lower() or s.strip().lower() in serv_imp_clean:
+                            if s.strip().lower() == serv_imp_clean:
                                 servico_idx = idx
                                 break
+                        if servico_idx == 0:
+                            for idx, s in enumerate(lista_servicos_assertec_global):
+                                if serv_imp_clean in s.strip().lower() or s.strip().lower() in serv_imp_clean:
+                                    servico_idx = idx
+                                    break
 
-                if not tecnico_val.strip() or not cliente_val.strip() or not protocolo_val.strip():
-                    st.error("Preencha o técnico, o cliente e o protocolo.")
-                else:
-                    st.warning("⚡ A executar automação Assertec... Não mexa no rato.")
-                    webbrowser.open("https://forms.gle/2MENn9xuKjj7pKVm6")
-                    time.sleep(2.0)
-                    
-                    for _ in range(3):
+                    if not tecnico_val.strip() or not cliente_val.strip() or not protocolo_val.strip():
+                        st.error("Preencha o técnico, o cliente e o protocolo.")
+                    else:
+                        st.warning("⚡ A executar automação Assertec... Não mexa no rato.")
+                        webbrowser.open("https://forms.gle/2MENn9xuKjj7pKVm6")
+                        time.sleep(2.0)
+                        
+                        for _ in range(3):
+                            pyautogui.press('tab')
+                            time.sleep(0.04)
+                        pyautogui.press('tab')
+                        pyautogui.press('tab')
+                        pyautogui.press('tab')
+                        pyautogui.press('enter')
+                        time.sleep(0.2)
+                        pyautogui.press('enter')
+                        time.sleep(0.08)
+                        
                         pyautogui.press('tab')
                         time.sleep(0.04)
-                    pyautogui.press('tab')
-                    pyautogui.press('tab')
-                    pyautogui.press('tab')
-                    pyautogui.press('enter')
-                    time.sleep(0.2)
-                    pyautogui.press('enter')
-                    time.sleep(0.08)
-                    
-                    pyautogui.press('tab')
-                    time.sleep(0.04)
-                    pyautogui.press('enter')
-                    time.sleep(0.25)
-                    pyautogui.write(tecnico_val)
-                    time.sleep(0.1)
-                    pyautogui.press('enter')
-                    time.sleep(0.1)
-                    
-                    pyautogui.press('tab')
-                    pyautogui.press('tab')
-                    pyautogui.press('space')
-                    time.sleep(0.1)
-                    
-                    for _ in range(3):
+                        pyautogui.press('enter')
+                        time.sleep(0.25)
+                        pyautogui.write(tecnico_val)
+                        time.sleep(0.1)
+                        pyautogui.press('enter')
+                        time.sleep(0.1)
+                        
                         pyautogui.press('tab')
-                        time.sleep(0.04)
-                    
-                    pyperclip.copy(str(cliente_val))
-                    pyautogui.hotkey('ctrl', 'v')
-                    time.sleep(0.08)
-                    
-                    pyautogui.press('tab')
-                    pyperclip.copy(str(protocolo_val))
-                    pyautogui.hotkey('ctrl', 'v')
-                    time.sleep(0.08)
-                    
-                    pyautogui.press('tab')
-                    for _ in range(cidade_idx):
                         pyautogui.press('tab')
-                        time.sleep(0.04)
-                    
-                    pyautogui.press('space')
-                    time.sleep(0.1)
-                    
-                    passos_restantes = len(lista_cidades_assertec) - cidade_idx
-                    for _ in range(passos_restantes):
+                        pyautogui.press('space')
+                        time.sleep(0.1)
+                        
+                        for _ in range(3):
+                            pyautogui.press('tab')
+                            time.sleep(0.04)
+                        
+                        pyperclip.copy(str(cliente_val))
+                        pyautogui.hotkey('ctrl', 'v')
+                        time.sleep(0.08)
+                        
                         pyautogui.press('tab')
-                        time.sleep(0.04)
-                    
-                    pyautogui.press('enter')
-                    time.sleep(0.3)
-                    
-                    pyautogui.press('home')
-                    time.sleep(0.1)
-                    for _ in range(servico_idx):
-                        pyautogui.press('down')
-                        time.sleep(0.03)
-                    
-                    pyautogui.press('enter')
-                    time.sleep(0.2)
-                    
-                    pyautogui.press('tab')
-                    time.sleep(0.1)
-                    
-                    pyautogui.press('tab')
-                    time.sleep(0.1)
-                    
-                    pyperclip.copy(str(quantidade_val))
-                    pyautogui.hotkey('ctrl', 'v')
-                    time.sleep(0.1)
-                    
-                    pyautogui.press('tab')
-                    time.sleep(0.1)
-                    
-                    if observacao_val.strip():
-                        pyperclip.copy(str(observacao_val))
+                        pyperclip.copy(str(protocolo_val))
+                        pyautogui.hotkey('ctrl', 'v')
+                        time.sleep(0.08)
+                        
+                        pyautogui.press('tab')
+                        for _ in range(cidade_idx):
+                            pyautogui.press('tab')
+                            time.sleep(0.04)
+                        
+                        pyautogui.press('space')
+                        time.sleep(0.1)
+                        
+                        passos_restantes = len(lista_cidades_assertec) - cidade_idx
+                        for _ in range(passos_restantes):
+                            pyautogui.press('tab')
+                            time.sleep(0.04)
+                        
+                        pyautogui.press('enter')
+                        time.sleep(0.3)
+                        
+                        pyautogui.press('home')
+                        time.sleep(0.1)
+                        for _ in range(servico_idx):
+                            pyautogui.press('down')
+                            time.sleep(0.03)
+                        
+                        pyautogui.press('enter')
+                        time.sleep(0.2)
+                        
+                        pyautogui.press('tab')
+                        time.sleep(0.1)
+                        
+                        pyautogui.press('tab')
+                        time.sleep(0.1)
+                        
+                        pyperclip.copy(str(quantidade_val))
                         pyautogui.hotkey('ctrl', 'v')
                         time.sleep(0.1)
-                    
-                    st.success("Automação Assertec concluída com sucesso! 🚀")
+                        
+                        pyautogui.press('tab')
+                        time.sleep(0.1)
+                        
+                        if observacao_val.strip():
+                            pyperclip.copy(str(observacao_val))
+                            pyautogui.hotkey('ctrl', 'v')
+                            time.sleep(0.1)
+                        
+                        st.success("Automação Assertec concluída com sucesso! 🚀")
 
             st.markdown("")
             col_lancar, col_conferir_plan, col_vazio_botoes = st.columns([1.5, 1.5, 2])
@@ -942,8 +998,8 @@ if aba_gestao is not None:
 # ABA 2: LANÇAMENTO ÚNICO UNIFICADO (TELEMÓVEL)
 # ==========================================
 with aba_gerador:
-    st.subheader("📱 Lançamento Único de Atendimento (AMIGO + ASSERTEC)")
-    st.caption("Preencha uma única vez: o sistema identifica automaticamente se o serviço vai para AMIGO + ASSERTEC ou somente ASSERTEC.")
+    st.subheader("📱 Lançamento Único de Atendimento")
+    st.caption("Legenda de Serviços:  ⚡ = Lança na Amigo e Assertec   |   🛠️ = Lança só na Assertec")
 
     with st.form("form_lancamento_unico_telemovel", clear_on_submit=False):
         col_t1, col_t2 = st.columns(2)
@@ -966,7 +1022,7 @@ with aba_gerador:
 
         col_m1, col_m2 = st.columns(2)
         with col_m1:
-            metragem_gen = st.number_input("Quantidade de Cabo Utilizado (m)", min_value=0, value=0, step=1, key="uni_cabo")
+            metragem_gen = st.number_input("Metragem / Cabo Utilizado (m) *", min_value=1, value=1, step=1, key="uni_cabo")
         with col_m2:
             lpu_principal = st.number_input("Qtd / LPU (Serviço Principal)", min_value=1, value=1, step=1, key="uni_lpu_prin")
 
@@ -1034,14 +1090,15 @@ with aba_gerador:
         else:
             servico_prin_limpo = limpar_prefixo_servico(servico_principal_raw)
             vai_amigo = servico_vai_para_amigo(servico_prin_limpo) or batimento_extra != "Não" or agregado_extra != "Não"
+            metragem_valida = max(1, int(metragem_gen or 1))
 
             lista_servicos_os = [
-                {"nome": servico_prin_limpo, "lpu": lpu_principal, "cabo": metragem_gen}
+                {"nome": servico_prin_limpo, "lpu": lpu_principal, "cabo": metragem_valida, "eh_principal": True}
             ]
             if batimento_extra != "Não":
-                lista_servicos_os.append({"nome": batimento_extra, "lpu": lpu_batimento, "cabo": 0})
+                lista_servicos_os.append({"nome": batimento_extra, "lpu": lpu_batimento, "cabo": 1, "eh_principal": False})
             if agregado_extra != "Não":
-                lista_servicos_os.append({"nome": agregado_extra, "lpu": lpu_agregado, "cabo": 0})
+                lista_servicos_os.append({"nome": agregado_extra, "lpu": lpu_agregado, "cabo": 1, "eh_principal": False})
 
             dados_os_atual = {
                 "data": datetime.now().strftime("%d/%m/%Y"),
@@ -1068,37 +1125,27 @@ with aba_gerador:
             else:
                 st.info("🛠️ Serviço exclusivo ASSERTEC identificado. Não é necessário lançar no portal AMIGO.")
 
-            eq_resumo_lista = [
-                f"{k}: {v['qtd']} ({v['tipo']})"
-                for k, v in equipamentos_form.items()
-                if v.get("usou")
-            ]
-            eq_resumo_str = ", ".join(eq_resumo_lista) if eq_resumo_lista else "Não se aplica"
+            # Formato idêntico ao original para funcionar 100% no lançador Assertec do PC
+            # Se houver mais de 1 serviço, gera mensagens completas separadas por 2 linhas em branco
+            nome_tec_assertec = "Anderson" if tecnico_selecionado == "ANDERSON" else "Márcio"
+            blocos_mensagens = []
 
-            destino_cabecalho = "AMIGO + ASSERTEC" if vai_amigo else "ASSERTEC"
-            linhas_servicos_wpp = [f"Serviço: {mapear_para_assertec(servico_prin_limpo, mercado_selecionado)} (LPU: {lpu_principal})"]
-            if batimento_extra != "Não":
-                linhas_servicos_wpp.append(f"Serviço Extra 1: {batimento_extra} (LPU: {lpu_batimento})")
-            if agregado_extra != "Não":
-                linhas_servicos_wpp.append(f"Serviço Extra 2: {agregado_extra} (LPU: {lpu_agregado})")
-            bloco_servicos_str = "\n".join(linhas_servicos_wpp)
-
-            obs_final_wpp = obs_gen.strip()
-            if any(servico_exige_equipamentos(s["nome"]) for s in lista_servicos_os):
-                obs_final_wpp = f"{obs_final_wpp} | Equipamentos: {eq_resumo_str}".strip(" |")
-
-            mensagem_gerada = f"""{destino_cabecalho}
+            for srv_item in lista_servicos_os:
+                nome_srv_assertec = mapear_para_assertec(srv_item["nome"], mercado_selecionado)
+                metragem_msg = srv_item["cabo"] if srv_item.get("eh_principal") else srv_item["lpu"]
+                bloco = f"""ASSERTEC
 {tecnico_selecionado}
-Técnico: ANDERSON WOLFART MOLLERKE (Exec: {tecnico_selecionado})
-Mercado: {mercado_selecionado}
+Técnico: {nome_tec_assertec}
 Cliente: {cliente_gen.strip().upper()}
 Protocolo: {limpar_protocolo_str(protocolo_gen)}
 Cidade: {cidade_gen}
-{bloco_servicos_str}
-Metragem: {metragem_gen}
-Obs: {obs_final_wpp}"""
+Serviço: {nome_srv_assertec}
+Metragem: {metragem_msg}
+Obs: {obs_gen.strip()}"""
+                blocos_mensagens.append(bloco)
 
-            st.session_state["mensagem_gerada_final"] = mensagem_gerada
+            # Une cada mensagem completa com 2 linhas em branco entre elas (\n\n\n)
+            st.session_state["mensagem_gerada_final"] = "\n\n\n".join(blocos_mensagens)
 
     if "mensagem_gerada_final" in st.session_state and st.session_state["mensagem_gerada_final"]:
         st.markdown("### 📋 Mensagem Gerada:")
