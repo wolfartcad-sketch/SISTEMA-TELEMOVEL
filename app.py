@@ -34,13 +34,18 @@ else:
     pyperclip = None
 
 # ==============================================================================
-# CONFIGURAÇÃO DA PLANILHA DE AGENDAMENTOS (GOOGLE SHEETS)
+# CONFIGURAÇÕES GERAIS E CREDENCIAIS BRASIL TECPAR (AMIGO / AVATO)
 # ==============================================================================
 SHEET_ID_AGENDAMENTOS = "1jXUw3oZKRPRXV53YCoqBxHUZN95igzpRN_r7yAhhoTk"
 URL_PLANILHA_AGENDAMENTOS_CSV = f"https://docs.google.com/spreadsheets/d/{SHEET_ID_AGENDAMENTOS}/gviz/tq?tqx=out:csv"
 GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyaSys2BNpDUVeM74BPvDxmseMYo2L57LnaZspAYIhBZ-qpaXIArbEqrvp_Cb1IhigF/exec"
 ARQUIVO_AGENDAMENTOS_LOCAL = "agendamentos_backup.csv"
+ARQUIVO_FILA_ASSERTEC_LOCAL = "fila_assertec_excel.json"
 COLUNAS_PADRAO_AG = ["DATA", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"]
+
+TECPAR_PORTAL_URL = "https://script.google.com/macros/s/AKfycbxHuYudjJeVWdzkp6H68f7HCIwafzQLgl-ogLsnZPSuFv9isdAaPL6140Z5PYVvwJOcJQ/exec"
+TECPAR_USER = "anderson.wolfart"
+TECPAR_PASS = "Fibra@5246"
 
 st.set_page_config(page_title="Sistema de Atendimento - FibraWer", layout="centered")
 
@@ -74,12 +79,61 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- LISTAS OFICIAIS DE APOIO ---
+# ==============================================================================
+# LISTAS OFICIAIS DE CIDADES, SERVIÇOS E REGRAS DE ROTEAMENTO
+# ==============================================================================
 lista_cidades_assertec = [
     "Alto Feliz", "Bom Principio", "Caxias do Sul", "Feliz", "Harmonia", "Ivoti", 
     "Linha Nova", "Pareci Novo", "Presidente Lucena", "São José do Hortêncio", 
     "São Sebastião do Caí", "São Vendelino", "Tupandi", "Vale Real"
 ]
+
+# Serviços que existem no Portal Brasil TecPar (AMIGO / AVATO) - Extraídos da lista oficial do portal
+SERVICOS_PORTAL_TECPAR = [
+    "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+    "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (301 ~ 500MT)",
+    "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (ACIMA DE 500MT)",
+    "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (RÁDIO)",
+    "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS WIFI)",
+    "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS)",
+    "ATIVAÇÃO DE SERVIÇO AGREGADO (WIFI/TV/FONE/PONTO EXTRA)",
+    "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (CÂMERAS WIFI)",
+    "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (WIFI/TV/FONE/PONTO EXTRA)",
+    "BATIMENTO DE CAIXA 1X16 PORTAS",
+    "BATIMENTO DE CAIXA 1X8 PORTAS",
+    "DESATIVAÇÃO DE SERVIÇO",
+    "DIÁRIAS (SOB DEMANDA - DUPLA)",
+    "LANÇAMENTO DE FIBRA AVULSA ATÉ - FIBRA ATÉ 12V",
+    "TROCA DE PONTO INTERNO (PONTO PRINCIPAL/WIFI/TV/FONE/CÂMERAS/PONTO EXTRA)",
+    "VISTORIA TÉCNICA / VIABILIDADE TÉCNICA"
+]
+
+# Serviços exclusivos da Assertec (Manutenções, Rompimentos, Improdutivas, Plantão, etc.)
+SERVICOS_EXCLUSIVOS_ASSERTEC = [
+    "Atendimento Presencial - REPARO",
+    "Atendimento Presencial - REPARO - ROMPIMENTO/LANÇAMENTO até 500 mt",
+    "Atendimento presencial - RNC",
+    "Visita improdutiva",
+    "Desativações de serviços completa",
+    "Desativações de serviços parcial / troca de endereço / migração de tecnologia",
+    "Km rodado acima de 50km",
+    "Metragem excedente (acima de 500 mt)",
+    "Fusão em caixa",
+    "Emenda de cabos rompidos na rede em infraestrutura própria",
+    "Instalação de nova CTO",
+    "Lançamento de cabo AS",
+    "PLANTAO - duplo",
+    "PLANTAO - simples",
+    "PLANTAO - Atendimento Presencial - REPARO",
+    "PLANTAO - Atendimento Presencial - REPARO - ROMPIMENTO/LANÇAMENTO até 500 mt"
+]
+
+# Lista Unificada para o Técnico no Telemóvel (Sem precisar escolher Empresa antes)
+LISTA_UNIFICADA_TELEMOVEL = (
+    ["Escolher..."]
+    + [f"⚡ [AMIGO + ASSERTEC] {s}" for s in SERVICOS_PORTAL_TECPAR]
+    + [f"🛠️ [SÓ ASSERTEC] {s}" for s in SERVICOS_EXCLUSIVOS_ASSERTEC]
+)
 
 lista_servicos_assertec_global = [
     "Escolher...",
@@ -137,26 +191,212 @@ lista_servicos_assertec_global = [
     "CORPORATIVO - VISTORIA TÉCNICA / VIABILIDADE TÉCNICA"
 ]
 
-lista_servicos_amigo_global = [
-    "Escolher...", 
-    "ATENDIMENTO PRESENCIAL - RNC", 
-    "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)", 
-    "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (301 ~ 500MT)", 
-    "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (ACIMA DE 500MT)", 
-    "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (RÁDIO)", 
-    "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS WIFI)", 
-    "ATIVAÇÃO DE SERVIÇO AGREGADO (Câmeras)", 
-    "ATIVAÇÃO DE SERVIÇO AGREGADO (WIFI/TV/FONE/PONTO EXTRA)", 
-    "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (WIFI/TV/FONE/PONTO EXTRA)", 
-    "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (CÂMERAS WIFI)", 
-    "BATIMENTO DE CAIXA 1X16 PORTAS", 
-    "BATIMENTO DE CAIXA 1X8 PORTAS", 
-    "DESATIVAÇÃO DE SERVIÇO - PARCIAL", 
-    "DIÁRIAS (SOB DEMANDA - DUPLA)", 
-    "LANÇAMENTO DE FIBRA AVULSA ATÉ - FIBRA ATÉ 12V", 
-    "TROCA DE PONTO INTERNO (PONTO PRINCIPAL/WIFI/TV/FONE/CÂMERAS/PONTO EXTRA)", 
-    "VISTORIA TÉCNICA / VIABILIDADE TÉCNICA"
+EQUIPAMENTOS_LISTA = [
+    "ONU",
+    "Roteador",
+    "Switch",
+    "Câmera",
+    "Setup box",
+    "Fire Stick",
+    "Aparelho de telefone",
+    "ATA"
 ]
+
+def limpar_prefixo_servico(servico_label):
+    return re.sub(r"^(⚡ \[AMIGO \+ ASSERTEC\]|🛠️ \[SÓ ASSERTEC\])\s*", "", str(servico_label)).strip()
+
+def servico_vai_para_amigo(servico_limpo):
+    return servico_limpo.upper() in [s.upper() for s in SERVICOS_PORTAL_TECPAR]
+
+def servico_exige_equipamentos(servico_limpo):
+    return "ATIVAÇÃO" in servico_limpo.upper()
+
+def mapear_para_assertec(servico_limpo, mercado="AMIGO - VAREJO"):
+    s_up = servico_limpo.upper()
+    eh_corp = "CORPORATIVO" in mercado.upper() or "AVATO" in mercado.upper()
+    if eh_corp:
+        for item in lista_servicos_assertec_global:
+            if item.upper() == f"CORPORATIVO - {s_up}":
+                return item
+    mapa_direto = {
+        "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)": "Ativação de Serviço - Acesso à Internet (0 ~ 300 mt)",
+        "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (301 ~ 500MT)": "Ativação de Serviço - Acesso à Internet (301 ~ 500 mt)",
+        "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (ACIMA DE 500MT)": "Metragem excedente (acima de 500 mt)",
+        "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS WIFI)": "Ativação de Serviço - Agregado (câmeras wifi)",
+        "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS)": "Ativação de Serviço - Agregado (câmeras)",
+        "ATIVAÇÃO DE SERVIÇO AGREGADO (WIFI/TV/FONE/PONTO EXTRA)": "Ativação de Serviço - Agregado (wifi/tv/fone/ponto extra)",
+        "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (CÂMERAS WIFI)": "Ativação de Serviço - Avulso (câmeras wifi)",
+        "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (WIFI/TV/FONE/PONTO EXTRA)": "Ativação de Serviço - Agregado Avulso (wifi/tv/fone/ponto extra)",
+        "BATIMENTO DE CAIXA 1X16 PORTAS": "Batimento de caixa 1x16 p",
+        "BATIMENTO DE CAIXA 1X8 PORTAS": "Batimento de caixa 1x8p",
+        "DESATIVAÇÃO DE SERVIÇO": "Desativações de serviços parcial / troca de endereço / migração de tecnologia",
+        "DIÁRIAS (SOB DEMANDA - DUPLA)": "Diária de atendimentos (sob demanda - dupla)",
+        "LANÇAMENTO DE FIBRA AVULSA ATÉ - FIBRA ATÉ 12V": "Lançamento de fibra avulsa até f.o 6v",
+        "TROCA DE PONTO INTERNO (PONTO PRINCIPAL/WIFI/TV/FONE/CÂMERAS/PONTO EXTRA)": "Troca de ponto interno (ponto principal/wifi/tv/fone/câmeras/ponto extra)",
+        "VISTORIA TÉCNICA / VIABILIDADE TÉCNICA": "Vistoria Técnica/ Viabilidade técnica",
+    }
+    return mapa_direto.get(s_up, servico_limpo)
+
+# ==============================================================================
+# ROBÔ DE AUTOMAÇÃO BRASIL TECPAR (AMIGO / AVATO) - 100% AUTOMATIZADO
+# ==============================================================================
+def executar_lancamento_portal_tecpar(dados_os):
+    servicos_amigo = [s for s in dados_os.get("servicos", []) if servico_vai_para_amigo(s["nome"])]
+    if not servicos_amigo:
+        return True, "Serviço exclusivo Assertec (não requer lançamento no portal Amigo)."
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return False, "Biblioteca Playwright não instalada neste ambiente. Instale com: pip install playwright && playwright install chromium"
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+            context = browser.new_context(viewport={"width": 1366, "height": 900})
+            page = context.new_page()
+            page.goto(TECPAR_PORTAL_URL, timeout=45000)
+
+            page.wait_for_timeout(4000)
+            target_frame = page
+            for frame in page.frames:
+                if "userCodeAppPanel" in frame.url or "googleusercontent" in frame.url:
+                    target_frame = frame
+                    break
+
+            # 1. TELA DE LOGIN
+            try:
+                campo_user = target_frame.locator("input[type='text'], input:not([type='password'])").first
+                campo_pass = target_frame.locator("input[type='password']").first
+                if campo_pass.is_visible(timeout=5000):
+                    campo_user.fill(TECPAR_USER)
+                    campo_pass.fill(TECPAR_PASS)
+                    target_frame.get_by_role("button", name=re.compile("Entrar", re.I)).click()
+                    page.wait_for_timeout(4000)
+            except Exception:
+                pass
+
+            # 2. PREENCHIMENTO DOS DADOS DO PROTOCOLO
+            data_str = dados_os.get("data", datetime.now().strftime("%d/%m/%Y"))
+            try:
+                dt_iso = datetime.strptime(data_str, "%d/%m/%Y").strftime("%Y-%m-%d")
+                input_data = target_frame.locator("input[type='date']").last
+                if input_data.is_visible(timeout=2000):
+                    input_data.fill(dt_iso)
+            except Exception:
+                pass
+
+            target_frame.get_by_placeholder(re.compile("12554094|Protocolo", re.I)).fill(str(dados_os["protocolo"]))
+
+            mercado_escolhido = dados_os.get("mercado", "AMIGO - VAREJO")
+            selects = target_frame.locator("select")
+            for i in range(selects.count()):
+                sel = selects.nth(i)
+                opcoes_txt = sel.inner_text()
+                if "AMIGO - VAREJO" in opcoes_txt:
+                    sel.select_option(label=mercado_escolhido)
+                    break
+
+            target_frame.get_by_placeholder(re.compile("NOME DO CLIENTE", re.I)).fill(dados_os["cliente"].upper())
+
+            input_cidade = target_frame.locator("input[placeholder*='CIDADE' i], input[value='FELIZ']").first
+            input_cidade.fill(dados_os["cidade"].upper())
+            input_cidade.dispatch_event("change")
+            page.wait_for_timeout(800)
+
+            obs_texto = dados_os.get("obs", "")
+            if obs_texto:
+                target_frame.get_by_placeholder(re.compile("motivo da visita", re.I)).fill(obs_texto)
+
+            # 3. ADICIONAR SERVIÇOS (PRINCIPAL + BATIMENTO CTO + AGREGADOS)
+            for idx, srv in enumerate(servicos_amigo):
+                for i in range(selects.count()):
+                    sel = selects.nth(i)
+                    opcoes_txt = sel.inner_text()
+                    if "ATIVAÇÃO DE SERVIÇO" in opcoes_txt or "BATIMENTO DE CAIXA" in opcoes_txt:
+                        sel.select_option(label=srv["nome"])
+                        break
+                page.wait_for_timeout(600)
+
+                lpu_val = str(srv.get("lpu", 1))
+                inputs_num = target_frame.locator("input[type='number']")
+                if inputs_num.count() >= 1:
+                    inp_lpu = inputs_num.first
+                    if inp_lpu.is_enabled():
+                        inp_lpu.fill(lpu_val)
+
+                cabo_val = str(srv.get("cabo", 0))
+                inp_cabo = target_frame.get_by_placeholder(re.compile("Obrigatório|Se houver", re.I))
+                if inp_cabo.is_visible():
+                    if int(re.sub(r"\D", "", cabo_val) or 0) > 0 or "ATIVAÇÃO" in srv["nome"].upper():
+                        inp_cabo.fill(cabo_val if int(re.sub(r"\D", "", cabo_val) or 0) > 0 else "1")
+
+                if idx < len(servicos_amigo) - 1:
+                    target_frame.get_by_role("button", name=re.compile("Adicionar serviço", re.I)).click()
+                    page.wait_for_timeout(800)
+
+            # 4. CLICAR EM "Lançar atividade" -> "Não, lançar agora"
+            target_frame.get_by_role("button", name=re.compile("Lançar atividade", re.I)).click()
+            page.wait_for_timeout(1200)
+
+            btn_nao_lancar = target_frame.get_by_role("button", name=re.compile("Não, lançar agora", re.I))
+            if btn_nao_lancar.is_visible(timeout=4000):
+                btn_nao_lancar.click()
+                page.wait_for_timeout(1500)
+
+            # 5. MODAL DE EQUIPAMENTOS (Para serviços de ATIVAÇÃO)
+            tem_ativacao = any(servico_exige_equipamentos(s["nome"]) for s in servicos_amigo)
+            if tem_ativacao:
+                equipamentos_usados = dados_os.get("equipamentos", {})
+                for _ in range(3):
+                    btn_confirmar_eq = target_frame.get_by_role("button", name=re.compile("Confirmar e lançar", re.I))
+                    if not btn_confirmar_eq.is_visible(timeout=3000):
+                        break
+
+                    for nome_eq in EQUIPAMENTOS_LISTA:
+                        info_eq = equipamentos_usados.get(nome_eq, {"usou": False, "qtd": 0, "tipo": "Novo"})
+                        linha_eq = target_frame.locator("div", has_text=re.compile(f"^{re.escape(nome_eq)}$", re.I)).locator("..")
+                        if info_eq.get("usou") and int(info_eq.get("qtd", 0)) > 0:
+                            try:
+                                linha_eq.locator("input").first.fill(str(info_eq["qtd"]))
+                                linha_eq.get_by_role("button", name=re.compile(f"^{info_eq['tipo']}$", re.I)).click()
+                            except Exception:
+                                pass
+                        else:
+                            try:
+                                linha_eq.get_by_role("button", name=re.compile("Não se aplica", re.I)).click()
+                            except Exception:
+                                pass
+
+                    page.wait_for_timeout(500)
+                    btn_confirmar_eq.click()
+                    page.wait_for_timeout(2000)
+
+            browser.close()
+            return True, "✅ Lançamento realizado automaticamente no portal Brasil TecPar (AMIGO)!"
+    except Exception as e:
+        return False, f"Aviso na automação Brasil TecPar: {e}"
+
+# ==============================================================================
+# FUNÇÕES AUXILIARES DE ARMAZENAMENTO E SINCRONIZAÇÃO
+# ==============================================================================
+def carregar_fila_assertec():
+    if os.path.exists(ARQUIVO_FILA_ASSERTEC_LOCAL):
+        try:
+            with open(ARQUIVO_FILA_ASSERTEC_LOCAL, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return []
+
+def salvar_na_fila_assertec(item_os):
+    fila = carregar_fila_assertec()
+    fila.append(item_os)
+    try:
+        with open(ARQUIVO_FILA_ASSERTEC_LOCAL, "w", encoding="utf-8") as f:
+            json.dump(fila, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
 def selectbox_com_borda_dinamica(label, opcoes, chave):
     if chave not in st.session_state:
@@ -279,14 +519,14 @@ def extrair_data_da_linha(row):
 # --- CRIAÇÃO DAS ABAS PRINCIPAIS ---
 if IS_CLOUD:
     aba_gerador, aba_agendamentos = st.tabs([
-        "📱 Gerador de Mensagens (Telemóvel)", 
+        "📱 Lançamento Único (Telemóvel)", 
         "📅 Agendamentos"
     ])
     aba_gestao = None
 else:
     aba_gestao, aba_gerador, aba_agendamentos = st.tabs([
         "💻 Gestão & Computador (Assertec & Excel)", 
-        "📱 Gerador de Mensagens (Telemóvel)",
+        "📱 Lançamento Único (Telemóvel)",
         "📅 Agendamentos"
     ])
 
@@ -319,7 +559,7 @@ if aba_gestao is not None:
             linhas = [l.strip() for l in texto.strip().split("\n") if l.strip()]
             primeiro_texto = linhas[0].lower() if len(linhas) > 0 else ""
             if "amigo" in primeiro_texto or "tecpar" in primeiro_texto:
-                st.session_state["formulario_escolhido"] = "Brasil TecPar / Amigo (Apenas Planilha Excel)"
+                st.session_state["formulario_escolhido"] = "Brasil TecPar / Amigo + Assertec"
             else:
                 st.session_state["formulario_escolhido"] = "Assertec / Fibrawer"
 
@@ -333,8 +573,9 @@ if aba_gestao is not None:
             st.session_state["proto"] = extrair(r"Protocolo:\s*(.*)", texto)
             st.session_state["cidade"] = extrair(r"Cidade:\s*(.*)", texto)
             
-            raw_servico = extrair(r"Serviço:\s*(.*)", texto)
+            raw_servico = extrair(r"Serviço Principal:\s*(.*)|Serviço:\s*(.*)", texto)
             raw_servico = re.sub(r'ATATIVAÇÃO', 'ATIVAÇÃO', raw_servico, flags=re.IGNORECASE)
+            raw_servico = re.sub(r'\s*\(LPU:.*?\)\s*$', '', raw_servico)
             st.session_state["servico"] = raw_servico
             
             qtd_extraida = extrair(r"Metragem[:]?\s*(.*)|Cabo[:]?\s*(.*)|Qtd[:]?\s*(.*)|Quantidade[:]?\s*(.*)", texto)
@@ -350,7 +591,7 @@ if aba_gestao is not None:
 
         msg_texto = st.text_area(
             "Cole a mensagem do WhatsApp aqui (Ex: ASSERTEC \n MARCIO ...)...", 
-            height=280, 
+            height=240, 
             key="msg_input"
         )
 
@@ -501,127 +742,124 @@ if aba_gestao is not None:
 
         if st.session_state["mensagem_processada"]:
             st.markdown("---")
-            formulario_escolhido = st.session_state["formulario_escolhido"]
-            
-            if formulario_escolhido == "Assertec / Fibrawer":
-                btn_executar = st.button("🚀 Executar Assertec", key="btn_exec_ass_topo")
-                if btn_executar:
-                    tecnico_val = st.session_state.get("tec", "")
-                    cliente_val = st.session_state.get("cli", "")
-                    protocolo_val = st.session_state.get("proto", "")
-                    cidade_importada = st.session_state.get("cidade", "")
-                    servico_importado = st.session_state.get("servico", "")
-                    quantidade_val = st.session_state.get("qtd", "") if st.session_state.get("qtd", "").strip() else "1"
-                    observacao_val = st.session_state.get("obs", "")
-                    
-                    cidade_idx = 0
-                    for idx, c in enumerate(lista_cidades_assertec):
-                        if c.lower() in cidade_importada.lower() and cidade_importada.strip():
-                            cidade_idx = idx
+            btn_executar = st.button("🚀 Executar Assertec (Formulário Google)", key="btn_exec_ass_topo")
+            if btn_executar:
+                tecnico_val = st.session_state.get("tec", "")
+                cliente_val = st.session_state.get("cli", "")
+                protocolo_val = st.session_state.get("proto", "")
+                cidade_importada = st.session_state.get("cidade", "")
+                servico_importado = mapear_para_assertec(st.session_state.get("servico", ""))
+                quantidade_val = st.session_state.get("qtd", "") if st.session_state.get("qtd", "").strip() else "1"
+                observacao_val = st.session_state.get("obs", "")
+                
+                cidade_idx = 0
+                for idx, c in enumerate(lista_cidades_assertec):
+                    if c.lower() in cidade_importada.lower() and cidade_importada.strip():
+                        cidade_idx = idx
+                        break
+                
+                servico_idx = 0
+                serv_imp_clean = servico_importado.strip().lower()
+                if serv_imp_clean:
+                    for idx, s in enumerate(lista_servicos_assertec_global):
+                        if s.strip().lower() == serv_imp_clean:
+                            servico_idx = idx
                             break
-                    
-                    servico_idx = 0
-                    serv_imp_clean = servico_importado.strip().lower()
-                    if serv_imp_clean:
+                    if servico_idx == 0:
                         for idx, s in enumerate(lista_servicos_assertec_global):
-                            if s.strip().lower() == serv_imp_clean:
+                            if serv_imp_clean in s.strip().lower() or s.strip().lower() in serv_imp_clean:
                                 servico_idx = idx
                                 break
-                        if servico_idx == 0:
-                            for idx, s in enumerate(lista_servicos_assertec_global):
-                                if serv_imp_clean in s.strip().lower() or s.strip().lower() in serv_imp_clean:
-                                    servico_idx = idx
-                                    break
 
-                    if not tecnico_val.strip() or not cliente_val.strip() or not protocolo_val.strip():
-                        st.error("Preencha o técnico, o cliente e o protocolo.")
-                    else:
-                        st.warning("⚡ A executar automação Assertec... Não mexa no rato.")
-                        webbrowser.open("https://forms.gle/2MENn9xuKjj7pKVm6")
-                        time.sleep(2.0)
-                        
-                        for _ in range(3):
-                            pyautogui.press('tab')
-                            time.sleep(0.04)
-                        pyautogui.press('tab')
-                        pyautogui.press('tab')
-                        pyautogui.press('tab')
-                        pyautogui.press('enter')
-                        time.sleep(0.2)
-                        pyautogui.press('enter')
-                        time.sleep(0.08)
-                        
+                if not tecnico_val.strip() or not cliente_val.strip() or not protocolo_val.strip():
+                    st.error("Preencha o técnico, o cliente e o protocolo.")
+                else:
+                    st.warning("⚡ A executar automação Assertec... Não mexa no rato.")
+                    webbrowser.open("https://forms.gle/2MENn9xuKjj7pKVm6")
+                    time.sleep(2.0)
+                    
+                    for _ in range(3):
                         pyautogui.press('tab')
                         time.sleep(0.04)
-                        pyautogui.press('enter')
-                        time.sleep(0.25)
-                        pyautogui.write(tecnico_val)
-                        time.sleep(0.1)
-                        pyautogui.press('enter')
-                        time.sleep(0.1)
-                        
+                    pyautogui.press('tab')
+                    pyautogui.press('tab')
+                    pyautogui.press('tab')
+                    pyautogui.press('enter')
+                    time.sleep(0.2)
+                    pyautogui.press('enter')
+                    time.sleep(0.08)
+                    
+                    pyautogui.press('tab')
+                    time.sleep(0.04)
+                    pyautogui.press('enter')
+                    time.sleep(0.25)
+                    pyautogui.write(tecnico_val)
+                    time.sleep(0.1)
+                    pyautogui.press('enter')
+                    time.sleep(0.1)
+                    
+                    pyautogui.press('tab')
+                    pyautogui.press('tab')
+                    pyautogui.press('space')
+                    time.sleep(0.1)
+                    
+                    for _ in range(3):
                         pyautogui.press('tab')
+                        time.sleep(0.04)
+                    
+                    pyperclip.copy(str(cliente_val))
+                    pyautogui.hotkey('ctrl', 'v')
+                    time.sleep(0.08)
+                    
+                    pyautogui.press('tab')
+                    pyperclip.copy(str(protocolo_val))
+                    pyautogui.hotkey('ctrl', 'v')
+                    time.sleep(0.08)
+                    
+                    pyautogui.press('tab')
+                    for _ in range(cidade_idx):
                         pyautogui.press('tab')
-                        pyautogui.press('space')
-                        time.sleep(0.1)
-                        
-                        for _ in range(3):
-                            pyautogui.press('tab')
-                            time.sleep(0.04)
-                        
-                        pyperclip.copy(str(cliente_val))
+                        time.sleep(0.04)
+                    
+                    pyautogui.press('space')
+                    time.sleep(0.1)
+                    
+                    passos_restantes = len(lista_cidades_assertec) - cidade_idx
+                    for _ in range(passos_restantes):
+                        pyautogui.press('tab')
+                        time.sleep(0.04)
+                    
+                    pyautogui.press('enter')
+                    time.sleep(0.3)
+                    
+                    pyautogui.press('home')
+                    time.sleep(0.1)
+                    for _ in range(servico_idx):
+                        pyautogui.press('down')
+                        time.sleep(0.03)
+                    
+                    pyautogui.press('enter')
+                    time.sleep(0.2)
+                    
+                    pyautogui.press('tab')
+                    time.sleep(0.1)
+                    
+                    pyautogui.press('tab')
+                    time.sleep(0.1)
+                    
+                    pyperclip.copy(str(quantidade_val))
+                    pyautogui.hotkey('ctrl', 'v')
+                    time.sleep(0.1)
+                    
+                    pyautogui.press('tab')
+                    time.sleep(0.1)
+                    
+                    if observacao_val.strip():
+                        pyperclip.copy(str(observacao_val))
                         pyautogui.hotkey('ctrl', 'v')
-                        time.sleep(0.08)
-                        
-                        pyautogui.press('tab')
-                        pyperclip.copy(str(protocolo_val))
-                        pyautogui.hotkey('ctrl', 'v')
-                        time.sleep(0.08)
-                        
-                        pyautogui.press('tab')
-                        for _ in range(cidade_idx):
-                            pyautogui.press('tab')
-                            time.sleep(0.04)
-                        
-                        pyautogui.press('space')
                         time.sleep(0.1)
-                        
-                        passos_restantes = len(lista_cidades_assertec) - cidade_idx
-                        for _ in range(passos_restantes):
-                            pyautogui.press('tab')
-                            time.sleep(0.04)
-                        
-                        pyautogui.press('enter')
-                        time.sleep(0.3)
-                        
-                        pyautogui.press('home')
-                        time.sleep(0.1)
-                        for _ in range(servico_idx):
-                            pyautogui.press('down')
-                            time.sleep(0.03)
-                        
-                        pyautogui.press('enter')
-                        time.sleep(0.2)
-                        
-                        pyautogui.press('tab')
-                        time.sleep(0.1)
-                        
-                        pyautogui.press('tab')
-                        time.sleep(0.1)
-                        
-                        pyperclip.copy(str(quantidade_val))
-                        pyautogui.hotkey('ctrl', 'v')
-                        time.sleep(0.1)
-                        
-                        pyautogui.press('tab')
-                        time.sleep(0.1)
-                        
-                        if observacao_val.strip():
-                            pyperclip.copy(str(observacao_val))
-                            pyautogui.hotkey('ctrl', 'v')
-                            time.sleep(0.1)
-                        
-                        st.success("Automação Assertec concluída com sucesso! 🚀")
+                    
+                    st.success("Automação Assertec concluída com sucesso! 🚀")
 
             st.markdown("")
             col_lancar, col_conferir_plan, col_vazio_botoes = st.columns([1.5, 1.5, 2])
@@ -700,107 +938,167 @@ if aba_gestao is not None:
                     except Exception:
                         st.warning("Não foi possível ler a planilha automaticamente.")
 
-        st.markdown("---")
-        
-        if st.session_state.get("mensagem_processada", False):
-            formulario_escolhido = st.session_state["formulario_escolhido"]
-            st.info(f"📋 Fluxo ativo: **{formulario_escolhido}** | Técnico da Mensagem: **{st.session_state.get('tec_msg', 'N/D')}**")
-
-            st.subheader(f"📋 Relatório de Conferência - {formulario_escolhido}")
-            
-            col_d1, col_d2 = st.columns(2)
-            with col_d1:
-                st.markdown(f"**Cliente:** {st.session_state.get('cli', 'N/D')}")
-                st.markdown(f"**Protocolo:** {st.session_state.get('proto', 'N/D')}")
-                st.markdown(f"**Cidade:** {st.session_state.get('cidade', 'N/D')}")
-            with col_d2:
-                st.markdown(f"**Serviço:** {st.session_state.get('servico', 'N/D')}")
-                st.markdown(f"**Técnico:** {st.session_state.get('tec', 'N/D')}")
-                st.markdown(f"**Quantidade / Metragem:** {st.session_state.get('qtd', '0')}")
-            
-            st.markdown(f"**Observações Finais:** {st.session_state.get('obs', 'Nenhuma observação.')}")
-        else:
-            st.info("ℹ️ Cole e processe uma mensagem do WhatsApp na caixa acima para visualizar o relatório de conferência.")
-
 # ==========================================
-# ABA 2: GERADOR DE MENSAGENS (Telemóvel)
+# ABA 2: LANÇAMENTO ÚNICO UNIFICADO (TELEMÓVEL)
 # ==========================================
 with aba_gerador:
-    st.subheader("📱 Gerador de Mensagem Padronizada para WhatsApp")
-    st.markdown("Selecione a empresa e preencha os campos obrigatórios para gerar a mensagem.")
+    st.subheader("📱 Lançamento Único de Atendimento (AMIGO + ASSERTEC)")
+    st.caption("Preencha uma única vez: o sistema identifica automaticamente se o serviço vai para AMIGO + ASSERTEC ou somente ASSERTEC.")
 
-    opcoes_empresa = ["Escolher...", "ASSERTEC", "AMIGO"]
-    empresa_gen = selectbox_com_borda_dinamica("Empresa / Tipo *", opcoes_empresa, "gen_empresa")
+    with st.form("form_lancamento_unico_telemovel", clear_on_submit=False):
+        col_t1, col_t2 = st.columns(2)
+        with col_t1:
+            tecnico_selecionado = st.selectbox("Técnico que executou *", ["Escolher...", "ANDERSON", "MARCIO"], key="uni_tecnico")
+        with col_t2:
+            mercado_selecionado = st.selectbox("Mercado (Brasil TecPar) *", ["AMIGO - VAREJO", "AVATO - CORPORATIVO"], index=0, key="uni_mercado")
 
-    if empresa_gen != "Escolher...":
-        with st.form(f"form_gerador_{empresa_gen}", clear_on_submit=False):
-            st.caption("Preencha os campos abaixo e toque em Gerar Mensagem Pronta:")
-            tec_opcoes = ["Escolher...", "ANDERSON", "MARCIO"]
-            cidades_opcoes = ["Escolher..."] + lista_cidades_assertec
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            cliente_gen = st.text_input("Nome do Cliente *", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="uni_cliente")
+        with col_c2:
+            protocolo_gen = st.text_input("Número do Protocolo *", placeholder="EX: 951753258", key="uni_protocolo")
 
-            if empresa_gen == "ASSERTEC":
-                tecnico_selecionado = st.selectbox("Técnico Responsável *", tec_opcoes, key="gen_tecnico_assertec")
-                cidade_gen = st.selectbox("Cidade *", cidades_opcoes, key="gen_cidade_assertec")
-                servico_gen = st.selectbox("Serviço Realizado *", lista_servicos_assertec_global, key="gen_servico_assertec")
-                cliente_gen = st.text_input("Nome do Cliente *", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="gen_cliente_assertec")
-                protocolo_gen = st.text_input("Número do Protocolo *", placeholder="EX: 114619", key="gen_protocolo_assertec")
-                metragem_gen = st.number_input("Metragem / Quantidade", min_value=0, value=1, step=1, key="gen_metragem_assertec")
-                obs_gen = st.text_area("Observações (Opcional)", placeholder="EX: Refeita configurações nos equipamentos...", key="gen_obs_assertec")
-            else:
-                tecnico_selecionado = st.selectbox("Técnico Responsável *", tec_opcoes, key="gen_tecnico_amigo")
-                cidade_gen = st.selectbox("Cidade *", cidades_opcoes, key="gen_cidade_amigo")
-                servico_gen = st.selectbox("Serviço Realizado *", lista_servicos_amigo_global, key="gen_servico_amigo")
-                cliente_gen = st.text_input("Nome do Cliente *", placeholder="EX: ELISETE ANTONIA DOS SANTOS", key="gen_cliente_amigo")
-                protocolo_gen = st.text_input("Número do Protocolo *", placeholder="EX: 114619", key="gen_protocolo_amigo")
-                lpu_gen = st.number_input("LPU", min_value=0, value=1, step=1, key="gen_lpu_amigo")
-                metragem_amigo_gen = st.number_input("Metragem / Cabo", min_value=0, value=0, step=1, key="gen_metragem_amigo")
-                km_rodado_gen = 0
-                st.text_input("Quilômetro Rodado (Km)", value="0", disabled=True, key="gen_km_amigo_fixo")
-                obs_gen = st.text_area("Observações (Opcional)", placeholder="EX: Refeita configurações nos equipamentos...", key="gen_obs_amigo")
+        cidade_gen = st.selectbox("Cidade *", ["Escolher..."] + lista_cidades_assertec, key="uni_cidade")
 
-            clicou_gerar_msg = st.form_submit_button("✨ Gerar Mensagem Pronta", type="primary", use_container_width=True)
+        st.markdown("---")
+        st.markdown("**1️⃣ Serviço Principal**")
+        servico_principal_raw = st.selectbox("Serviço Realizado *", LISTA_UNIFICADA_TELEMOVEL, key="uni_servico_principal")
 
-        if clicou_gerar_msg:
-            t_ok = tecnico_selecionado != "Escolher..."
-            c_ok = cidade_gen != "Escolher..."
-            s_ok = servico_gen != "Escolher..."
-            cli_ok = cliente_gen.strip() != ""
-            p_ok = protocolo_gen.strip() != ""
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            metragem_gen = st.number_input("Quantidade de Cabo Utilizado (m)", min_value=0, value=0, step=1, key="uni_cabo")
+        with col_m2:
+            lpu_principal = st.number_input("Qtd / LPU (Serviço Principal)", min_value=1, value=1, step=1, key="uni_lpu_prin")
 
-            if not (t_ok and c_ok and s_ok and cli_ok and p_ok):
-                st.error("⚠️ Preencha todos os campos obrigatórios (*) antes de gerar a mensagem.")
-            else:
-                if tecnico_selecionado == "ANDERSON":
-                    tecnico_gen = "ANDERSON"
-                    nome_tec_completo = "ANDERSON WOLFART MOLLERKE" if empresa_gen == "AMIGO" else "Anderson"
+        st.markdown("---")
+        st.markdown("**2️⃣ Serviços Adicionais no Mesmo Protocolo (Opcional)**")
+        col_b1, col_b2 = st.columns([2, 1])
+        with col_b1:
+            batimento_extra = st.selectbox(
+                "Houve Batimento de CTO neste protocolo?",
+                ["Não", "BATIMENTO DE CAIXA 1X16 PORTAS", "BATIMENTO DE CAIXA 1X8 PORTAS"],
+                key="uni_batimento"
+            )
+        with col_b2:
+            lpu_batimento = st.number_input("Qtd CTOs Batidas (LPU)", min_value=1, value=1, step=1, key="uni_lpu_bat")
+
+        col_a1, col_a2 = st.columns([2, 1])
+        with col_a1:
+            agregado_extra = st.selectbox(
+                "Houve Ponto Extra / Agregado neste protocolo?",
+                [
+                    "Não",
+                    "ATIVAÇÃO DE SERVIÇO AGREGADO (WIFI/TV/FONE/PONTO EXTRA)",
+                    "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS WIFI)",
+                    "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS)",
+                    "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (WIFI/TV/FONE/PONTO EXTRA)",
+                    "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (CÂMERAS WIFI)"
+                ],
+                key="uni_agregado"
+            )
+        with col_a2:
+            lpu_agregado = st.number_input("Qtd Pontos/Câmeras (LPU)", min_value=1, value=1, step=1, key="uni_lpu_agr")
+
+        st.markdown("---")
+        with st.expander("📦 Equipamentos Utilizados (Obrigatório apenas para serviços de ATIVAÇÃO)", expanded=True):
+            st.caption("Marque apenas os equipamentos utilizados. Os restantes serão lançados automaticamente como 'Não se aplica'.")
+            equipamentos_form = {}
+            for eq_nome in EQUIPAMENTOS_LISTA:
+                c_eq1, c_eq2, c_eq3 = st.columns([1.5, 1, 1.5])
+                padrao_usou = True if eq_nome == "ONU" else False
+                with c_eq1:
+                    usou_eq = st.checkbox(f"{eq_nome}", value=padrao_usou, key=f"eq_use_{eq_nome}")
+                with c_eq2:
+                    qtd_eq = st.number_input(f"Qtd ({eq_nome})", min_value=1, value=1, step=1, key=f"eq_qtd_{eq_nome}", label_visibility="collapsed")
+                with c_eq3:
+                    tipo_eq = st.selectbox(f"Tipo ({eq_nome})", ["Novo", "Remanufaturado"], key=f"eq_tipo_{eq_nome}", label_visibility="collapsed")
+                equipamentos_form[eq_nome] = {"usou": usou_eq, "qtd": qtd_eq, "tipo": tipo_eq}
+
+        obs_gen = st.text_area("Observações Técnicas (Opcional)", placeholder="EX: Refeita configuração nos equipamentos...", key="uni_obs")
+
+        clicou_lancar_unico = st.form_submit_button(
+            "🚀 Lançar no Sistema e Gerar Mensagem WhatsApp",
+            type="primary",
+            use_container_width=True
+        )
+
+    if clicou_lancar_unico:
+        t_ok = tecnico_selecionado != "Escolher..."
+        c_ok = cidade_gen != "Escolher..."
+        s_ok = servico_principal_raw != "Escolher..."
+        cli_ok = cliente_gen.strip() != ""
+        p_ok = protocolo_gen.strip() != ""
+
+        if not (t_ok and c_ok and s_ok and cli_ok and p_ok):
+            st.error("⚠️ Preencha todos os campos obrigatórios (*): Técnico, Cliente, Protocolo, Cidade e Serviço Principal.")
+        else:
+            servico_prin_limpo = limpar_prefixo_servico(servico_principal_raw)
+            vai_amigo = servico_vai_para_amigo(servico_prin_limpo) or batimento_extra != "Não" or agregado_extra != "Não"
+
+            lista_servicos_os = [
+                {"nome": servico_prin_limpo, "lpu": lpu_principal, "cabo": metragem_gen}
+            ]
+            if batimento_extra != "Não":
+                lista_servicos_os.append({"nome": batimento_extra, "lpu": lpu_batimento, "cabo": 0})
+            if agregado_extra != "Não":
+                lista_servicos_os.append({"nome": agregado_extra, "lpu": lpu_agregado, "cabo": 0})
+
+            dados_os_atual = {
+                "data": datetime.now().strftime("%d/%m/%Y"),
+                "tecnico_exec": tecnico_selecionado,
+                "tecnico_portal": "ANDERSON WOLFART",
+                "mercado": mercado_selecionado,
+                "cliente": cliente_gen.strip().upper(),
+                "protocolo": limpar_protocolo_str(protocolo_gen),
+                "cidade": cidade_gen,
+                "servicos": lista_servicos_os,
+                "equipamentos": equipamentos_form,
+                "obs": obs_gen.strip()
+            }
+
+            salvar_na_fila_assertec(dados_os_atual)
+
+            if vai_amigo:
+                with st.spinner("🤖 Lançando automaticamente no portal Brasil TecPar (AMIGO) em nome de Anderson Wolfart..."):
+                    ok_tecpar, msg_tecpar = executar_lancamento_portal_tecpar(dados_os_atual)
+                if ok_tecpar:
+                    st.success(msg_tecpar)
                 else:
-                    tecnico_gen = "MARCIO"
-                    nome_tec_completo = "ANDERSON WOLFART MOLLERKE" if empresa_gen == "AMIGO" else "Márcio"
+                    st.warning(msg_tecpar)
+            else:
+                st.info("🛠️ Serviço exclusivo ASSERTEC identificado. Não é necessário lançar no portal AMIGO.")
 
-                obs_texto_limpo = obs_gen.strip()
-                if empresa_gen == "AMIGO":
-                    mensagem_gerada = f"""{empresa_gen}
-{tecnico_gen}
-Técnico: {nome_tec_completo}
+            eq_resumo_lista = [
+                f"{k}: {v['qtd']} ({v['tipo']})"
+                for k, v in equipamentos_form.items()
+                if v.get("usou")
+            ]
+            eq_resumo_str = ", ".join(eq_resumo_lista) if eq_resumo_lista else "Não se aplica"
+
+            destino_cabecalho = "AMIGO + ASSERTEC" if vai_amigo else "ASSERTEC"
+            linhas_servicos_wpp = [f"Serviço: {mapear_para_assertec(servico_prin_limpo, mercado_selecionado)} (LPU: {lpu_principal})"]
+            if batimento_extra != "Não":
+                linhas_servicos_wpp.append(f"Serviço Extra 1: {batimento_extra} (LPU: {lpu_batimento})")
+            if agregado_extra != "Não":
+                linhas_servicos_wpp.append(f"Serviço Extra 2: {agregado_extra} (LPU: {lpu_agregado})")
+            bloco_servicos_str = "\n".join(linhas_servicos_wpp)
+
+            obs_final_wpp = obs_gen.strip()
+            if any(servico_exige_equipamentos(s["nome"]) for s in lista_servicos_os):
+                obs_final_wpp = f"{obs_final_wpp} | Equipamentos: {eq_resumo_str}".strip(" |")
+
+            mensagem_gerada = f"""{destino_cabecalho}
+{tecnico_selecionado}
+Técnico: ANDERSON WOLFART MOLLERKE (Exec: {tecnico_selecionado})
+Mercado: {mercado_selecionado}
 Cliente: {cliente_gen.strip().upper()}
-Protocolo: {protocolo_gen.strip()}
+Protocolo: {limpar_protocolo_str(protocolo_gen)}
 Cidade: {cidade_gen}
-Serviço: {servico_gen}
-LPU: {lpu_gen}
-Metragem: {metragem_amigo_gen}
-Km Rodado: {km_rodado_gen}
-Obs: {obs_texto_limpo}"""
-                else:
-                    mensagem_gerada = f"""{empresa_gen}
-{tecnico_gen}
-Técnico: {nome_tec_completo}
-Cliente: {cliente_gen.strip().upper()}
-Protocolo: {protocolo_gen.strip()}
-Cidade: {cidade_gen}
-Serviço: {servico_gen}
+{bloco_servicos_str}
 Metragem: {metragem_gen}
-Obs: {obs_texto_limpo}"""
-                st.session_state["mensagem_gerada_final"] = mensagem_gerada
+Obs: {obs_final_wpp}"""
+
+            st.session_state["mensagem_gerada_final"] = mensagem_gerada
 
     if "mensagem_gerada_final" in st.session_state and st.session_state["mensagem_gerada_final"]:
         st.markdown("### 📋 Mensagem Gerada:")
