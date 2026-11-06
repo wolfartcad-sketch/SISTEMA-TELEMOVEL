@@ -330,17 +330,23 @@ def obter_frame_interno_gas(page, timeout_ms=30000):
     return page.frames[-1]
 
 def selecionar_opcao_select_flexivel(select_locator, texto_alvo):
-    """Seleciona a opção de um <select> comparando o texto sem depender de espaços ou acentos."""
+    """Seleciona a opção de um <select> comparando o texto, ignorando opções vazias ou 'Selecione...'."""
     def norm(s):
         return re.sub(r"\s+", "", str(s or "").upper())
 
     alvo_n = norm(texto_alvo)
+    if not alvo_n:
+        return False
+
     opcoes = select_locator.locator("option")
     qtd = opcoes.count()
     for idx in range(qtd):
-        txt_op = opcoes.nth(idx).inner_text()
+        txt_op = opcoes.nth(idx).inner_text() or opcoes.nth(idx).text_content() or ""
         val_op = opcoes.nth(idx).get_attribute("value") or ""
-        if norm(txt_op) == alvo_n or alvo_n in norm(txt_op) or norm(txt_op) in alvo_n:
+        tn = norm(txt_op)
+        if not tn or "SELECIONE" in tn or tn == "TODOS" or tn == "TODAS":
+            continue
+        if tn == alvo_n or alvo_n in tn or tn in alvo_n:
             if val_op:
                 select_locator.select_option(value=val_op)
             else:
@@ -349,33 +355,29 @@ def selecionar_opcao_select_flexivel(select_locator, texto_alvo):
             return True
     return False
 
-def preencher_cidade_form(target_frame, nome_cidade):
-    """Localiza o input de CIDADE (que inicia com FELIZ) e preenche disparando o cálculo de KM."""
-    js_find_cidade = """
-    (cid) => {
-        const isVis = (el) => {
-            if (!el) return false;
-            const st = window.getComputedStyle(el);
-            return st.display !== 'none' && st.visibility !== 'hidden' && el.offsetWidth > 0 && el.offsetHeight > 0;
-        };
+def marcar_input_por_rotulo_isolado(target_frame, rotulo_exato, attr_marca):
+    """
+    Localiza a tag folha cujo texto é exatamente rotulo_exato (ex: 'CIDADE')
+    e marca APENAS o input que está no mesmo bloco individual (onde há 1 único input),
+    jamais subindo para o grid inteiro do formulário.
+    """
+    js_mark = """
+    ([rotulo, marca]) => {
         const norm = (s) => (s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toUpperCase().trim();
-        const labels = Array.from(document.querySelectorAll('label, span, div')).filter(isVis);
-        for (const lb of labels) {
-            const t = norm(lb.innerText || lb.textContent);
-            if (t === 'CIDADE') {
-                let p = lb.parentElement;
+        const alvo = norm(rotulo);
+        const todos = Array.from(document.querySelectorAll('label, span, div, p'));
+        for (const el of todos) {
+            if (el.children.length > 0) continue;
+            const t = norm(el.innerText || el.textContent);
+            if (t === alvo) {
+                let p = el.parentElement;
                 for (let i = 0; i < 3 && p; i++) {
-                    const inp = p.querySelector('input:not([type="hidden"]):not([disabled])');
-                    if (inp && isVis(inp)) {
-                        inp.focus();
-                        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-                        if (setter) setter.call(inp, cid);
-                        else inp.value = cid;
-                        inp.dispatchEvent(new Event('input', { bubbles: true }));
-                        inp.dispatchEvent(new Event('change', { bubbles: true }));
-                        inp.dispatchEvent(new Event('blur', { bubbles: true }));
+                    const inps = p.querySelectorAll('input:not([type="hidden"]):not([disabled])');
+                    if (inps.length === 1) {
+                        inps[0].setAttribute('data-robo-alvo', marca);
                         return true;
                     }
+                    if (inps.length > 1) break;
                     p = p.parentElement;
                 }
             }
@@ -384,20 +386,9 @@ def preencher_cidade_form(target_frame, nome_cidade):
     }
     """
     try:
-        if target_frame.evaluate(js_find_cidade, nome_cidade.upper()):
-            return True
+        return target_frame.evaluate(js_mark, [rotulo_exato, attr_marca])
     except Exception:
-        pass
-    try:
-        inp_cid = target_frame.locator("input[value='FELIZ']:visible, input[placeholder*='CIDADE' i]:visible").first
-        if inp_cid.is_visible(timeout=2000):
-            inp_cid.click()
-            inp_cid.fill(nome_cidade.upper())
-            inp_cid.dispatch_event("change")
-            return True
-    except Exception:
-        pass
-    return False
+        return False
 
 def executar_lancamento_portal_tecpar(dados_os):
     servicos_amigo = [s for s in dados_os.get("servicos", []) if servico_vai_para_amigo(s["nome"])]
@@ -414,7 +405,8 @@ def executar_lancamento_portal_tecpar(dados_os):
     try:
         with sync_playwright() as p:
             browser = iniciar_browser_playwright(p)
-            context = browser.new_context(viewport={"width": 1366, "height": 1000})
+            # Altura 2200px para caber o formulário inteiro na tela sem scroll e sem o cabeçalho cobrir botões
+            context = browser.new_context(viewport={"width": 1366, "height": 2200})
             page = context.new_page()
             page.goto(TECPAR_PORTAL_URL, timeout=60000)
 
@@ -432,7 +424,7 @@ def executar_lancamento_portal_tecpar(dados_os):
                 campo_pass_vis.fill(TECPAR_PASS)
                 target_frame.locator("button:visible", has_text=re.compile(r"^\s*Entrar\s*$", re.I)).first.click()
 
-            # Aguarda o botão "Lançar atividade" ficar visível (garante que o login terminou e o formulário abriu)
+            # Aguarda o botão "Lançar atividade" ficar visível
             btn_lancar_ativ = None
             inicio_painel = time.time()
             while (time.time() - inicio_painel) < 30:
@@ -451,48 +443,70 @@ def executar_lancamento_portal_tecpar(dados_os):
                 browser.close()
                 return False, "❌ O portal não abriu a tela de lançamento após o login. Veja o print abaixo."
 
-            # Aguarda os dados do técnico (TEC-071) carregarem
             page.wait_for_timeout(1500)
 
-            # 2. PREENCHIMENTO DOS DADOS DO PROTOCOLO
+            # 2. PREENCHIMENTO DOS DADOS DO PROTOCOLO (Sem jamais sobrescrever a Data da Atividade)
+            # Garante que DATA DA ATIVIDADE (último input type='date' visível) está preenchida com a data de hoje
+            try:
+                inp_data_ativ = target_frame.locator("input[type='date']:visible").last
+                if inp_data_ativ.is_visible(timeout=1500):
+                    val_dt_atual = inp_data_ativ.input_value()
+                    if not val_dt_atual:
+                        inp_data_ativ.fill(datetime.now().strftime("%Y-%m-%d"))
+                        inp_data_ativ.dispatch_event("change")
+            except Exception:
+                pass
+
+            # PROTOCOLO (usa especificamente o placeholder 12554094 ou o rótulo isolado PROTOCOLO)
             proto_str = str(dados_os["protocolo"]).strip()
-            loc_proto = target_frame.locator("input[placeholder*='12554094']:visible, input[placeholder*='Protocolo' i]:visible").first
+            loc_proto = target_frame.locator("input[placeholder*='12554094']:visible").first
+            if not loc_proto.is_visible(timeout=2000):
+                marcar_input_por_rotulo_isolado(target_frame, "PROTOCOLO", "proto")
+                loc_proto = target_frame.locator("input[data-robo-alvo='proto']:visible").first
             loc_proto.click()
             loc_proto.fill(proto_str)
-            loc_proto.dispatch_event("change")
+            loc_proto.press("Tab")
+            page.wait_for_timeout(400)
 
-            # Seleciona MERCADO do formulário (aquele que tem "Selecione..." e "AMIGO - VAREJO", ignorando o filtro "Todos")
+            # MERCADO (seleciona o dropdown do formulário que tem 'AMIGO - VAREJO' e não tem 'Todos')
             mercado_escolhido = dados_os.get("mercado", "AMIGO - VAREJO")
             selects_vis = target_frame.locator("select:visible")
-            selecionou_mercado = False
             for i in range(selects_vis.count()):
                 sel = selects_vis.nth(i)
-                txt_opcoes = sel.inner_text()
-                if "AMIGO - VAREJO" in txt_opcoes and "Selecione" in txt_opcoes:
+                txt_opcoes = sel.text_content() or ""
+                if "AMIGO - VAREJO" in txt_opcoes and "Todos" not in txt_opcoes:
                     selecionar_opcao_select_flexivel(sel, mercado_escolhido)
-                    selecionou_mercado = True
                     break
-            if not selecionou_mercado:
-                for i in range(selects_vis.count()):
-                    sel = selects_vis.nth(i)
-                    if "AMIGO - VAREJO" in sel.inner_text() and "Todos" not in sel.inner_text():
-                        selecionar_opcao_select_flexivel(sel, mercado_escolhido)
-                        break
-
-            # Aguarda carregar a lista de serviços daquele Mercado
-            page.wait_for_timeout(1200)
-
-            # Nome do Cliente
-            loc_cli = target_frame.locator("input[placeholder*='NOME DO CLIENTE' i]:visible").first
-            loc_cli.click()
-            loc_cli.fill(dados_os["cliente"].upper())
-            loc_cli.dispatch_event("change")
-
-            # Cidade
-            preencher_cidade_form(target_frame, dados_os["cidade"])
             page.wait_for_timeout(1000)
 
-            # Observações Técnicas
+            # NOME DO CLIENTE
+            loc_cli = target_frame.locator("input[placeholder*='NOME DO CLIENTE' i]:visible").first
+            if not loc_cli.is_visible(timeout=2000):
+                marcar_input_por_rotulo_isolado(target_frame, "NOME DO CLIENTE", "cliente")
+                loc_cli = target_frame.locator("input[data-robo-alvo='cliente']:visible").first
+            loc_cli.click()
+            loc_cli.fill(dados_os["cliente"].upper())
+            loc_cli.press("Tab")
+            page.wait_for_timeout(400)
+
+            # CIDADE (marca apenas o input isolado do rótulo CIDADE, sem tocar na Data da Atividade)
+            preencheu_cid = False
+            if marcar_input_por_rotulo_isolado(target_frame, "CIDADE", "cidade"):
+                loc_cid = target_frame.locator("input[data-robo-alvo='cidade']:visible").first
+                if loc_cid.is_visible(timeout=2000):
+                    loc_cid.click()
+                    loc_cid.fill(dados_os["cidade"].upper())
+                    loc_cid.press("Tab")
+                    preencheu_cid = True
+            if not preencheu_cid:
+                loc_cid_fb = target_frame.locator("input[value='FELIZ']:visible").first
+                if loc_cid_fb.is_visible(timeout=1500):
+                    loc_cid_fb.click()
+                    loc_cid_fb.fill(dados_os["cidade"].upper())
+                    loc_cid_fb.press("Tab")
+            page.wait_for_timeout(1200)
+
+            # OBSERVAÇÕES TÉCNICAS
             obs_texto = dados_os.get("obs", "")
             if obs_texto:
                 loc_obs = target_frame.locator("textarea:visible").first
@@ -507,12 +521,13 @@ def executar_lancamento_portal_tecpar(dados_os):
                 selecionou_srv = False
                 for i in range(selects_vis.count()):
                     sel = selects_vis.nth(i)
-                    txt_opcoes = sel.inner_text().upper()
+                    txt_opcoes = (sel.text_content() or "").upper()
                     if "ATIVAÇÃO" in txt_opcoes or "BATIMENTO" in txt_opcoes or "VISTORIA" in txt_opcoes:
                         selecionou_srv = selecionar_opcao_select_flexivel(sel, srv["nome"])
                         break
 
                 if not selecionou_srv:
+                    target_frame.evaluate("window.scrollTo(0, 0)")
                     page.screenshot(path=ARQUIVO_PRINT_PORTAL, full_page=True)
                     browser.close()
                     return False, f"❌ Não foi possível encontrar o serviço '{srv['nome']}' na lista do portal. Veja o print abaixo."
@@ -526,7 +541,7 @@ def executar_lancamento_portal_tecpar(dados_os):
                     if inp_lpu.is_visible(timeout=1000) and inp_lpu.is_enabled():
                         inp_lpu.click()
                         inp_lpu.fill(lpu_val)
-                        inp_lpu.dispatch_event("change")
+                        inp_lpu.press("Tab")
                 except Exception:
                     pass
 
@@ -539,33 +554,34 @@ def executar_lancamento_portal_tecpar(dados_os):
                     if inp_cabo.is_visible(timeout=1500) and inp_cabo.is_enabled():
                         inp_cabo.click()
                         inp_cabo.fill(str(cabo_num))
-                        inp_cabo.dispatch_event("change")
+                        inp_cabo.press("Tab")
                 except Exception:
                     pass
 
-                page.wait_for_timeout(500)
+                page.wait_for_timeout(600)
 
                 if idx < len(servicos_amigo) - 1:
                     btn_add_srv = target_frame.locator("button:visible", has_text=re.compile("Adicionar serviço", re.I)).first
                     btn_add_srv.click()
-                    page.wait_for_timeout(1000)
+                    page.wait_for_timeout(1200)
 
             # 4. CLICAR EM "Lançar atividade" -> "Não, lançar agora"
             btn_lancar_ativ = target_frame.locator("button:visible", has_text=re.compile("Lançar atividade", re.I)).first
             btn_lancar_ativ.click()
-            page.wait_for_timeout(1500)
+            page.wait_for_timeout(1800)
 
             btn_nao_lancar = target_frame.locator("button:visible", has_text=re.compile("Não, lançar agora", re.I)).first
             if btn_nao_lancar.is_visible(timeout=6000):
                 btn_nao_lancar.click()
-                page.wait_for_timeout(1500)
+                page.wait_for_timeout(1800)
             else:
-                # Verifica se abriu direto o modal de equipamentos ou se deu erro na tela
                 btn_conf_teste = target_frame.locator("button:visible", has_text=re.compile("Confirmar e lançar", re.I)).first
                 if not btn_conf_teste.is_visible(timeout=2000):
+                    target_frame.evaluate("window.scrollTo(0, 0)")
+                    page.wait_for_timeout(300)
                     page.screenshot(path=ARQUIVO_PRINT_PORTAL, full_page=True)
                     browser.close()
-                    return False, "⚠️ O portal não avançou após clicar em 'Lançar atividade'. Veja o print abaixo para conferir o motivo."
+                    return False, "⚠️ O portal não avançou após clicar em 'Lançar atividade'. Veja o print completo abaixo para conferir os campos do topo."
 
             # 5. MODAL DE EQUIPAMENTOS (Para serviços de ATIVAÇÃO)
             tem_ativacao = any(servico_exige_equipamentos(s["nome"]) for s in servicos_amigo)
@@ -579,17 +595,19 @@ def executar_lancamento_portal_tecpar(dados_os):
                     btns_nao_aplica = target_frame.locator("button:visible", has_text=re.compile(r"^\s*Não se aplica\s*$", re.I))
                     btns_novo = target_frame.locator("button:visible", has_text=re.compile(r"^\s*Novo\s*$", re.I))
                     btns_reman = target_frame.locator("button:visible", has_text=re.compile(r"^\s*Remanufaturado\s*$", re.I))
-                    inputs_qtd = target_frame.locator("input[placeholder*='Qtd' i]:visible")
 
                     for idx_eq, nome_eq in enumerate(EQUIPAMENTOS_LISTA):
                         info_eq = equipamentos_usados.get(nome_eq, {"usou": False, "qtd": 0, "tipo": "Novo"})
                         if info_eq.get("usou") and int(info_eq.get("qtd", 0)) > 0:
                             try:
-                                if inputs_qtd.count() > idx_eq:
-                                    inp_q = inputs_qtd.nth(idx_eq)
-                                    inp_q.click()
-                                    inp_q.fill(str(info_eq["qtd"]))
-                                    inp_q.dispatch_event("change")
+                                if btns_novo.count() > idx_eq:
+                                    btn_n = btns_novo.nth(idx_eq)
+                                    # Localiza o input de quantidade na mesma linha deste equipamento
+                                    inp_linha = btn_n.locator("xpath=ancestor::div[.//input][1]//input").first
+                                    if inp_linha.is_visible(timeout=1000):
+                                        inp_linha.click()
+                                        inp_linha.fill(str(info_eq["qtd"]))
+                                        inp_linha.dispatch_event("change")
                                 if str(info_eq.get("tipo", "Novo")).lower().startswith("reman"):
                                     if btns_reman.count() > idx_eq:
                                         btns_reman.nth(idx_eq).click()
@@ -624,13 +642,15 @@ def executar_lancamento_portal_tecpar(dados_os):
                     pass
                 page.wait_for_timeout(1000)
 
+            target_frame.evaluate("window.scrollTo(0, 0)")
+            page.wait_for_timeout(300)
             page.screenshot(path=ARQUIVO_PRINT_PORTAL, full_page=True)
             browser.close()
 
             if gravou_com_sucesso:
                 return True, f"✅ Lançamento confirmado no portal Brasil TecPar (Protocolo {proto_str} gravado em Minhas Atividades)!"
             else:
-                return False, f"⚠️ O robô preencheu os dados, mas o protocolo {proto_str} ainda não apareceu confirmado em 'Minhas Atividades'. Abra o print abaixo para ver o que o portal exibiu."
+                return False, f"⚠️ O robô executou o preenchimento, mas o protocolo {proto_str} ainda não apareceu em 'Minhas Atividades'. Veja o print completo abaixo."
     except Exception as e:
         return False, f"Aviso na automação Brasil TecPar: {e}"
 
