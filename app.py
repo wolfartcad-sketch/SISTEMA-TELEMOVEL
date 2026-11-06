@@ -66,19 +66,47 @@ st.markdown(
         margin-top: 0.2rem !important;
         margin-bottom: 0.2rem !important;
     }
-    /* Diminui a fonte e permite quebra de linha nos seletores para telas pequenas de telemóvel */
-    div[data-baseweb="select"] * {
-        font-size: 0.80rem !important;
-        white-space: normal !important;
-        line-height: 1.25 !important;
+    /* Caixa do serviço selecionado com altura de 2 linhas e sem cortar texto com '...' */
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+        min-height: 3.4rem !important;
+        height: auto !important;
+        padding-top: 6px !important;
+        padding-bottom: 6px !important;
+        align-items: center !important;
     }
-    ul[role="listbox"] li, div[role="listbox"] div[role="option"] {
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div > div:first-child {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        height: auto !important;
+        max-width: calc(100% - 24px) !important;
+        display: block !important;
+    }
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div > div:first-child > div,
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] span,
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] div {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        word-break: break-word !important;
+        line-height: 1.25 !important;
+        font-size: 0.78rem !important;
+        height: auto !important;
+        max-height: none !important;
+    }
+    /* Opções da lista aberta com quebra de linha para leitura completa no telemóvel */
+    div[data-baseweb="popover"] li,
+    div[data-baseweb="popover"] div[role="option"],
+    ul[role="listbox"] li,
+    div[role="listbox"] div[role="option"] {
         font-size: 0.78rem !important;
         white-space: normal !important;
         word-break: break-word !important;
         line-height: 1.25 !important;
-        padding-top: 6px !important;
-        padding-bottom: 6px !important;
+        height: auto !important;
+        min-height: 2.6rem !important;
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
     }
     </style>
     """,
@@ -144,8 +172,7 @@ SERVICOS_EXCLUSIVOS_ASSERTEC = [
     "PLANTAO - Atendimento Presencial - REPARO - ROMPIMENTO/LANÇAMENTO até 500 mt"
 ]
 
-# Lista Unificada apenas com emoji curto no início para não cortar na tela do telemóvel:
-# ⚡ = Amigo + Assertec | 🛠️ = Só Assertec
+# Lista Unificada apenas com emoji curto no início: ⚡ = Amigo + Assertec | 🛠️ = Só Assertec
 LISTA_UNIFICADA_TELEMOVEL = (
     ["Escolher..."]
     + [f"⚡ {s}" for s in SERVICOS_PORTAL_TECPAR]
@@ -262,7 +289,6 @@ def mapear_para_assertec(servico_limpo, mercado="AMIGO - VAREJO"):
 # ==============================================================================
 @st.cache_resource(show_spinner=False)
 def garantir_instalacao_chromium():
-    """Garante que o binário do Chromium do Playwright está instalado no Streamlit Cloud."""
     try:
         subprocess.run(
             [sys.executable, "-m", "playwright", "install", "chromium"],
@@ -275,7 +301,6 @@ def garantir_instalacao_chromium():
         return False
 
 def iniciar_browser_playwright(p):
-    """Inicia o navegador Chromium (usa binário do sistema se existir ou baixa automaticamente)."""
     opcoes_args = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
     for caminho_sis in ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"]:
         if os.path.exists(caminho_sis):
@@ -288,6 +313,75 @@ def iniciar_browser_playwright(p):
     except Exception:
         subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
         return p.chromium.launch(headless=True, args=opcoes_args)
+
+def obter_frame_interno_gas(page, timeout_ms=30000):
+    """
+    O Google Apps Script cria dois iframes aninhados: #sandboxFrame (externo) e #userHtmlFrame (interno).
+    Esta função localiza especificamente o #userHtmlFrame onde estão os campos reais do formulário.
+    """
+    inicio = time.time()
+    while (time.time() - inicio) * 1000 < timeout_ms:
+        f_user = page.frame(name="userHtmlFrame")
+        if f_user:
+            try:
+                if f_user.locator("input, button").count() > 0:
+                    return f_user
+            except Exception:
+                pass
+
+        for frame in reversed(page.frames):
+            try:
+                if frame.locator("input").count() >= 2:
+                    return frame
+            except Exception:
+                pass
+        page.wait_for_timeout(500)
+    return page.frames[-1]
+
+def definir_campo_por_rotulo_js(target_frame, rotulo_busca, valor):
+    """Preenche um input/select/textarea buscando pelo texto do rótulo (label) acima dele."""
+    js_code = """
+    ([rotulo, val]) => {
+        const norm = (s) => (s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toUpperCase().trim();
+        const alvo = norm(rotulo);
+        const els = Array.from(document.querySelectorAll('label, span, div, th, td, p'));
+        for (const el of els) {
+            const txt = norm(el.innerText || el.textContent);
+            if (txt === alvo || (txt.startsWith(alvo) && txt.length < alvo.length + 25)) {
+                let container = el.parentElement;
+                for (let nivel = 0; nivel < 3 && container; nivel++) {
+                    const campo = container.querySelector('input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])');
+                    if (campo) {
+                        if (campo.tagName === 'SELECT') {
+                            const opts = Array.from(campo.options);
+                            const opt = opts.find(o => norm(o.text).includes(norm(val)) || norm(o.value).includes(norm(val)));
+                            if (opt) {
+                                campo.value = opt.value;
+                                campo.dispatchEvent(new Event('change', { bubbles: true }));
+                                return true;
+                            }
+                        } else {
+                            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+                                || Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+                            if (setter) setter.call(campo, val);
+                            else campo.value = val;
+                            campo.dispatchEvent(new Event('input', { bubbles: true }));
+                            campo.dispatchEvent(new Event('change', { bubbles: true }));
+                            campo.dispatchEvent(new Event('blur', { bubbles: true }));
+                            return true;
+                        }
+                    }
+                    container = container.parentElement;
+                }
+            }
+        }
+        return false;
+    }
+    """
+    try:
+        return target_frame.evaluate(js_code, [rotulo_busca, str(valor)])
+    except Exception:
+        return False
 
 def executar_lancamento_portal_tecpar(dados_os):
     servicos_amigo = [s for s in dados_os.get("servicos", []) if servico_vai_para_amigo(s["nome"])]
@@ -306,96 +400,135 @@ def executar_lancamento_portal_tecpar(dados_os):
             browser = iniciar_browser_playwright(p)
             context = browser.new_context(viewport={"width": 1366, "height": 900})
             page = context.new_page()
-            page.goto(TECPAR_PORTAL_URL, timeout=45000)
+            page.goto(TECPAR_PORTAL_URL, timeout=60000)
 
-            page.wait_for_timeout(4000)
-            target_frame = page
-            for frame in page.frames:
-                if "userCodeAppPanel" in frame.url or "googleusercontent" in frame.url:
-                    target_frame = frame
-                    break
+            # Localiza o iframe interno real (#userHtmlFrame) do Google Apps Script
+            target_frame = obter_frame_interno_gas(page, timeout_ms=30000)
 
             # 1. TELA DE LOGIN
-            try:
-                campo_user = target_frame.locator("input[type='text'], input:not([type='password'])").first
-                campo_pass = target_frame.locator("input[type='password']").first
-                if campo_pass.is_visible(timeout=5000):
-                    campo_user.fill(TECPAR_USER)
-                    campo_pass.fill(TECPAR_PASS)
-                    target_frame.get_by_role("button", name=re.compile("Entrar", re.I)).click()
-                    page.wait_for_timeout(4500)
-                    for frame in page.frames:
-                        if "userCodeAppPanel" in frame.url or "googleusercontent" in frame.url:
-                            target_frame = frame
-                            break
-            except Exception:
-                pass
+            campo_pass = target_frame.locator("input[type='password']").first
+            if campo_pass.is_visible(timeout=8000):
+                campo_user = target_frame.locator("input:not([type='password']):not([type='hidden'])").first
+                campo_user.fill(TECPAR_USER)
+                campo_pass.fill(TECPAR_PASS)
+                target_frame.get_by_role("button", name=re.compile("Entrar", re.I)).click()
+
+            # Aguarda o painel principal carregar após o login (até 30s)
+            inicio_painel = time.time()
+            while (time.time() - inicio_painel) < 30:
+                target_frame = obter_frame_interno_gas(page, timeout_ms=5000)
+                try:
+                    texto_body = target_frame.locator("body").inner_text(timeout=2000).upper()
+                    if "PROTOCOLO" in texto_body and ("CLIENTE" in texto_body or "MERCADO" in texto_body):
+                        break
+                except Exception:
+                    pass
+                page.wait_for_timeout(800)
+
+            page.wait_for_timeout(1000)
 
             # 2. PREENCHIMENTO DOS DADOS DO PROTOCOLO
-            data_str = dados_os.get("data", datetime.now().strftime("%d/%m/%Y"))
+            # Protocolo
+            preencheu_proto = False
             try:
-                dt_iso = datetime.strptime(data_str, "%d/%m/%Y").strftime("%Y-%m-%d")
-                input_data = target_frame.locator("input[type='date']").last
-                if input_data.is_visible(timeout=2000):
-                    input_data.fill(dt_iso)
+                loc_proto = target_frame.locator("input[placeholder*='12554094'], input[placeholder*='Protocolo' i]").first
+                if loc_proto.is_visible(timeout=3000):
+                    loc_proto.fill(str(dados_os["protocolo"]))
+                    preencheu_proto = True
             except Exception:
                 pass
+            if not preencheu_proto:
+                definir_campo_por_rotulo_js(target_frame, "PROTOCOLO", str(dados_os["protocolo"]))
 
-            target_frame.get_by_placeholder(re.compile("12554094|Protocolo", re.I)).fill(str(dados_os["protocolo"]))
-
+            # Mercado (AMIGO - VAREJO ou AVATO - CORPORATIVO)
             mercado_escolhido = dados_os.get("mercado", "AMIGO - VAREJO")
+            selecionou_mercado = False
             selects = target_frame.locator("select")
             for i in range(selects.count()):
                 sel = selects.nth(i)
-                opcoes_txt = sel.inner_text()
-                if "AMIGO - VAREJO" in opcoes_txt:
-                    sel.select_option(label=mercado_escolhido)
-                    break
-
-            target_frame.get_by_placeholder(re.compile("NOME DO CLIENTE", re.I)).fill(dados_os["cliente"].upper())
-
-            input_cidade = target_frame.locator("input[placeholder*='CIDADE' i], input[value='FELIZ']").first
-            input_cidade.fill(dados_os["cidade"].upper())
-            input_cidade.dispatch_event("change")
+                try:
+                    opcoes_txt = sel.inner_text(timeout=1500)
+                    if "AMIGO - VAREJO" in opcoes_txt:
+                        sel.select_option(label=mercado_escolhido)
+                        selecionou_mercado = True
+                        break
+                except Exception:
+                    pass
+            if not selecionou_mercado:
+                definir_campo_por_rotulo_js(target_frame, "MERCADO", mercado_escolhido)
             page.wait_for_timeout(800)
 
+            # Nome do Cliente
+            preencheu_cli = False
+            try:
+                loc_cli = target_frame.locator("input[placeholder*='CLIENTE' i]").first
+                if loc_cli.is_visible(timeout=2000):
+                    loc_cli.fill(dados_os["cliente"].upper())
+                    preencheu_cli = True
+            except Exception:
+                pass
+            if not preencheu_cli:
+                definir_campo_por_rotulo_js(target_frame, "NOME DO CLIENTE", dados_os["cliente"].upper())
+
+            # Cidade
+            definir_campo_por_rotulo_js(target_frame, "CIDADE", dados_os["cidade"].upper())
+            page.wait_for_timeout(800)
+
+            # Observações Técnicas
             obs_texto = dados_os.get("obs", "")
             if obs_texto:
-                target_frame.get_by_placeholder(re.compile("motivo da visita", re.I)).fill(obs_texto)
+                try:
+                    loc_obs = target_frame.locator("textarea").first
+                    if loc_obs.is_visible(timeout=2000):
+                        loc_obs.fill(obs_texto)
+                    else:
+                        definir_campo_por_rotulo_js(target_frame, "OBSERVAÇÕES TÉCNICAS", obs_texto)
+                except Exception:
+                    definir_campo_por_rotulo_js(target_frame, "OBSERVAÇÕES TÉCNICAS", obs_texto)
 
             # 3. ADICIONAR SERVIÇOS (PRINCIPAL + BATIMENTO CTO + AGREGADOS)
             for idx, srv in enumerate(servicos_amigo):
+                selecionou_srv = False
+                selects = target_frame.locator("select")
                 for i in range(selects.count()):
                     sel = selects.nth(i)
-                    opcoes_txt = sel.inner_text()
-                    if "ATIVAÇÃO DE SERVIÇO" in opcoes_txt or "BATIMENTO DE CAIXA" in opcoes_txt:
-                        sel.select_option(label=srv["nome"])
-                        break
-                page.wait_for_timeout(600)
+                    try:
+                        opcoes_txt = sel.inner_text(timeout=1500).upper()
+                        if "ATIVAÇÃO" in opcoes_txt or "BATIMENTO" in opcoes_txt or "VISTORIA" in opcoes_txt:
+                            sel.select_option(label=srv["nome"])
+                            selecionou_srv = True
+                            break
+                    except Exception:
+                        pass
+                if not selecionou_srv:
+                    definir_campo_por_rotulo_js(target_frame, "SERVIÇO REALIZADO", srv["nome"])
+                page.wait_for_timeout(800)
 
+                # Quantidade de Serviços (LPU)
                 lpu_val = str(max(1, int(srv.get("lpu", 1) or 1)))
-                inputs_num = target_frame.locator("input[type='number']")
-                if inputs_num.count() >= 1:
-                    inp_lpu = inputs_num.first
-                    if inp_lpu.is_enabled():
-                        inp_lpu.fill(lpu_val)
+                definir_campo_por_rotulo_js(target_frame, "QUANTIDADE DE SERVIÇOS", lpu_val)
 
-                # Metragem na Amigo sempre no mínimo 1 (nunca zero)
+                # Quantidade de Cabo Utilizado (M) - Sempre no mínimo 1
                 cabo_num = max(1, int(re.sub(r"\D", "", str(srv.get("cabo", 1))) or 1))
-                inp_cabo = target_frame.get_by_placeholder(re.compile("Obrigatório|Se houver", re.I))
-                if inp_cabo.is_visible():
-                    inp_cabo.fill(str(cabo_num))
+                preencheu_cabo = definir_campo_por_rotulo_js(target_frame, "QUANTIDADE DE CABO UTILIZADO", str(cabo_num))
+                if not preencheu_cabo:
+                    try:
+                        inp_cabo = target_frame.locator("input[placeholder*='Obrigatório' i], input[placeholder*='Se houver' i]").first
+                        if inp_cabo.is_visible(timeout=1500):
+                            inp_cabo.fill(str(cabo_num))
+                    except Exception:
+                        pass
 
                 if idx < len(servicos_amigo) - 1:
                     target_frame.get_by_role("button", name=re.compile("Adicionar serviço", re.I)).click()
-                    page.wait_for_timeout(800)
+                    page.wait_for_timeout(900)
 
             # 4. CLICAR EM "Lançar atividade" -> "Não, lançar agora"
             target_frame.get_by_role("button", name=re.compile("Lançar atividade", re.I)).click()
-            page.wait_for_timeout(1200)
+            page.wait_for_timeout(1500)
 
             btn_nao_lancar = target_frame.get_by_role("button", name=re.compile("Não, lançar agora", re.I))
-            if btn_nao_lancar.is_visible(timeout=4000):
+            if btn_nao_lancar.is_visible(timeout=5000):
                 btn_nao_lancar.click()
                 page.wait_for_timeout(1500)
 
@@ -405,7 +538,7 @@ def executar_lancamento_portal_tecpar(dados_os):
                 equipamentos_usados = dados_os.get("equipamentos", {})
                 for _ in range(3):
                     btn_confirmar_eq = target_frame.get_by_role("button", name=re.compile("Confirmar e lançar", re.I))
-                    if not btn_confirmar_eq.is_visible(timeout=3000):
+                    if not btn_confirmar_eq.is_visible(timeout=4000):
                         break
 
                     for nome_eq in EQUIPAMENTOS_LISTA:
@@ -423,9 +556,9 @@ def executar_lancamento_portal_tecpar(dados_os):
                             except Exception:
                                 pass
 
-                    page.wait_for_timeout(500)
+                    page.wait_for_timeout(600)
                     btn_confirmar_eq.click()
-                    page.wait_for_timeout(2000)
+                    page.wait_for_timeout(2500)
 
             browser.close()
             return True, "✅ Lançamento realizado automaticamente no portal Brasil TecPar (AMIGO)!"
