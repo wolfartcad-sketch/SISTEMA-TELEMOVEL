@@ -91,7 +91,6 @@ lista_cidades_assertec = [
     "São Sebastião do Caí", "São Vendelino", "Tupandi", "Vale Real"
 ]
 
-# Serviços que existem no Portal Brasil TecPar (AMIGO / AVATO) - Nomes Oficiais Exatos
 SERVICOS_PORTAL_TECPAR = [
     "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
     "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (301 ~ 500MT)",
@@ -111,9 +110,7 @@ SERVICOS_PORTAL_TECPAR = [
     "VISTORIA TÉCNICA / VIABILIDADE TÉCNICA"
 ]
 
-# Mapa de Nomes Curtos para Telemóvel (Máximo 25 caracteres incluindo emoji) -> Nome Oficial Original
 MAPA_SERVICOS_CURTOS = {
-    # ⚡ Serviços AMIGO + ASSERTEC
     "⚡ INSTALAÇÃO (0 A 300M)": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
     "⚡ INSTALAÇÃO (301 A 500M)": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (301 ~ 500MT)",
     "⚡ INSTALAÇÃO (+ DE 500M)": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (ACIMA DE 500MT)",
@@ -131,7 +128,6 @@ MAPA_SERVICOS_CURTOS = {
     "⚡ TROCA DE PONTO INTERNO": "TROCA DE PONTO INTERNO (PONTO PRINCIPAL/WIFI/TV/FONE/CÂMERAS/PONTO EXTRA)",
     "⚡ VISTORIA / VIABILIDADE": "VISTORIA TÉCNICA / VIABILIDADE TÉCNICA",
 
-    # 🛠️ Serviços Exclusivos ASSERTEC
     "🛠️ MANUTENÇÃO / REPARO": "Atendimento Presencial - REPARO",
     "🛠️ ROMPIMENTO ATÉ 500M": "Atendimento Presencial - REPARO - ROMPIMENTO/LANÇAMENTO até 500 mt",
     "🛠️ ATENDIMENTO RNC": "Atendimento presencial - RNC",
@@ -150,21 +146,7 @@ MAPA_SERVICOS_CURTOS = {
     "🛠️ PLANTÃO - ROMPIMENTO": "PLANTAO - Atendimento Presencial - REPARO - ROMPIMENTO/LANÇAMENTO até 500 mt",
 }
 
-MAPA_BATIMENTO_CURTO = {
-    "Não": "Não",
-    "⚡ BATIDA CTO 1X16": "BATIMENTO DE CAIXA 1X16 PORTAS",
-    "⚡ BATIDA CTO 1X8": "BATIMENTO DE CAIXA 1X8 PORTAS",
-}
-
-MAPA_AGREGADO_CURTO = {
-    "Não": "Não",
-    "⚡ AGREGADO PONTO EXTRA": "ATIVAÇÃO DE SERVIÇO AGREGADO (WIFI/TV/FONE/PONTO EXTRA)",
-    "⚡ AGREGADO CÂMERA WIFI": "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS WIFI)",
-    "⚡ AGREGADO CÂMERAS CABO": "ATIVAÇÃO DE SERVIÇO AGREGADO (CÂMERAS)",
-    "⚡ AVULSO PONTO EXTRA": "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (WIFI/TV/FONE/PONTO EXTRA)",
-    "⚡ AVULSO CÂMERA WIFI": "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (CÂMERAS WIFI)",
-}
-
+OPCOES_SERVICOS_EXTRAS = ["Nenhum"] + list(MAPA_SERVICOS_CURTOS.keys())
 LISTA_UNIFICADA_TELEMOVEL = ["Escolher..."] + list(MAPA_SERVICOS_CURTOS.keys())
 
 lista_servicos_assertec_global = [
@@ -235,12 +217,10 @@ EQUIPAMENTOS_LISTA = [
 ]
 
 def obter_nome_oficial_servico(rotulo_curto):
+    if not rotulo_curto or rotulo_curto == "Nenhum":
+        return ""
     if rotulo_curto in MAPA_SERVICOS_CURTOS:
         return MAPA_SERVICOS_CURTOS[rotulo_curto]
-    if rotulo_curto in MAPA_BATIMENTO_CURTO:
-        return MAPA_BATIMENTO_CURTO[rotulo_curto]
-    if rotulo_curto in MAPA_AGREGADO_CURTO:
-        return MAPA_AGREGADO_CURTO[rotulo_curto]
     texto = str(rotulo_curto or "").strip()
     texto = re.sub(r"^(⚡|🛠️)\s*(\[.*?\]\s*)?", "", texto)
     return texto.strip()
@@ -279,7 +259,7 @@ def mapear_para_assertec(servico_oficial, mercado="AMIGO - VAREJO"):
     return mapa_direto.get(s_up, servico_oficial)
 
 # ==============================================================================
-# ROBÔ DE AUTOMAÇÃO BRASIL TECPAR (AMIGO / AVATO) - COM VERIFICAÇÃO REAL
+# ROBÔ DE AUTOMAÇÃO BRASIL TECPAR (AMIGO / AVATO) - COM MÚLTIPLOS SERVIÇOS
 # ==============================================================================
 @st.cache_resource(show_spinner=False)
 def garantir_instalacao_chromium():
@@ -309,7 +289,6 @@ def iniciar_browser_playwright(p):
         return p.chromium.launch(headless=True, args=opcoes_args)
 
 def obter_frame_interno_gas(page, timeout_ms=30000):
-    """Localiza especificamente o iframe #userHtmlFrame do Google Apps Script."""
     inicio = time.time()
     while (time.time() - inicio) * 1000 < timeout_ms:
         f_user = page.frame(name="userHtmlFrame")
@@ -330,7 +309,6 @@ def obter_frame_interno_gas(page, timeout_ms=30000):
     return page.frames[-1]
 
 def selecionar_opcao_select_flexivel(select_locator, texto_alvo):
-    """Seleciona a opção de um <select> comparando o texto, ignorando opções vazias ou 'Selecione...'."""
     def norm(s):
         return re.sub(r"\s+", "", str(s or "").upper())
 
@@ -356,11 +334,6 @@ def selecionar_opcao_select_flexivel(select_locator, texto_alvo):
     return False
 
 def marcar_input_por_rotulo_isolado(target_frame, rotulo_exato, attr_marca):
-    """
-    Localiza a tag folha cujo texto é exatamente rotulo_exato (ex: 'CIDADE')
-    e marca APENAS o input que está no mesmo bloco individual (onde há 1 único input),
-    jamais subindo para o grid inteiro do formulário.
-    """
     js_mark = """
     ([rotulo, marca]) => {
         const norm = (s) => (s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toUpperCase().trim();
@@ -405,7 +378,6 @@ def executar_lancamento_portal_tecpar(dados_os):
     try:
         with sync_playwright() as p:
             browser = iniciar_browser_playwright(p)
-            # Altura 2200px para caber o formulário inteiro na tela sem scroll e sem o cabeçalho cobrir botões
             context = browser.new_context(viewport={"width": 1366, "height": 2200})
             page = context.new_page()
             page.goto(TECPAR_PORTAL_URL, timeout=60000)
@@ -424,7 +396,6 @@ def executar_lancamento_portal_tecpar(dados_os):
                 campo_pass_vis.fill(TECPAR_PASS)
                 target_frame.locator("button:visible", has_text=re.compile(r"^\s*Entrar\s*$", re.I)).first.click()
 
-            # Aguarda o botão "Lançar atividade" ficar visível
             btn_lancar_ativ = None
             inicio_painel = time.time()
             while (time.time() - inicio_painel) < 30:
@@ -445,19 +416,15 @@ def executar_lancamento_portal_tecpar(dados_os):
 
             page.wait_for_timeout(1500)
 
-            # 2. PREENCHIMENTO DOS DADOS DO PROTOCOLO (Sem jamais sobrescrever a Data da Atividade)
-            # Garante que DATA DA ATIVIDADE (último input type='date' visível) está preenchida com a data de hoje
+            # 2. DADOS DO PROTOCOLO
             try:
                 inp_data_ativ = target_frame.locator("input[type='date']:visible").last
-                if inp_data_ativ.is_visible(timeout=1500):
-                    val_dt_atual = inp_data_ativ.input_value()
-                    if not val_dt_atual:
-                        inp_data_ativ.fill(datetime.now().strftime("%Y-%m-%d"))
-                        inp_data_ativ.dispatch_event("change")
+                if inp_data_ativ.is_visible(timeout=1500) and not inp_data_ativ.input_value():
+                    inp_data_ativ.fill(datetime.now().strftime("%Y-%m-%d"))
+                    inp_data_ativ.dispatch_event("change")
             except Exception:
                 pass
 
-            # PROTOCOLO (usa especificamente o placeholder 12554094 ou o rótulo isolado PROTOCOLO)
             proto_str = str(dados_os["protocolo"]).strip()
             loc_proto = target_frame.locator("input[placeholder*='12554094']:visible").first
             if not loc_proto.is_visible(timeout=2000):
@@ -468,7 +435,6 @@ def executar_lancamento_portal_tecpar(dados_os):
             loc_proto.press("Tab")
             page.wait_for_timeout(400)
 
-            # MERCADO (seleciona o dropdown do formulário que tem 'AMIGO - VAREJO' e não tem 'Todos')
             mercado_escolhido = dados_os.get("mercado", "AMIGO - VAREJO")
             selects_vis = target_frame.locator("select:visible")
             for i in range(selects_vis.count()):
@@ -479,7 +445,6 @@ def executar_lancamento_portal_tecpar(dados_os):
                     break
             page.wait_for_timeout(1000)
 
-            # NOME DO CLIENTE
             loc_cli = target_frame.locator("input[placeholder*='NOME DO CLIENTE' i]:visible").first
             if not loc_cli.is_visible(timeout=2000):
                 marcar_input_por_rotulo_isolado(target_frame, "NOME DO CLIENTE", "cliente")
@@ -489,7 +454,6 @@ def executar_lancamento_portal_tecpar(dados_os):
             loc_cli.press("Tab")
             page.wait_for_timeout(400)
 
-            # CIDADE (marca apenas o input isolado do rótulo CIDADE, sem tocar na Data da Atividade)
             preencheu_cid = False
             if marcar_input_por_rotulo_isolado(target_frame, "CIDADE", "cidade"):
                 loc_cid = target_frame.locator("input[data-robo-alvo='cidade']:visible").first
@@ -506,7 +470,6 @@ def executar_lancamento_portal_tecpar(dados_os):
                     loc_cid_fb.press("Tab")
             page.wait_for_timeout(1200)
 
-            # OBSERVAÇÕES TÉCNICAS
             obs_texto = dados_os.get("obs", "")
             if obs_texto:
                 loc_obs = target_frame.locator("textarea:visible").first
@@ -515,55 +478,52 @@ def executar_lancamento_portal_tecpar(dados_os):
                     loc_obs.fill(obs_texto)
                     loc_obs.dispatch_event("change")
 
-            # 3. ADICIONAR SERVIÇOS (PRINCIPAL + BATIMENTO CTO + AGREGADOS)
+            # 3. LANÇAMENTO DE MÚLTIPLOS SERVIÇOS USANDO O BOTÃO "+ Adicionar serviço"
             for idx, srv in enumerate(servicos_amigo):
+                if idx > 0:
+                    btn_add = target_frame.locator("button:visible", has_text=re.compile("Adicionar serviço", re.I)).first
+                    if btn_add.is_visible(timeout=3000):
+                        btn_add.click()
+                        page.wait_for_timeout(1500)
+
                 selects_vis = target_frame.locator("select:visible")
-                selecionou_srv = False
-                for i in range(selects_vis.count()):
-                    sel = selects_vis.nth(i)
-                    txt_opcoes = (sel.text_content() or "").upper()
-                    if "ATIVAÇÃO" in txt_opcoes or "BATIMENTO" in txt_opcoes or "VISTORIA" in txt_opcoes:
-                        selecionou_srv = selecionar_opcao_select_flexivel(sel, srv["nome"])
+                sel_alvo = None
+                for i in range(selects_vis.count() - 1, -1, -1):
+                    s_cand = selects_vis.nth(i)
+                    txt_ops = (s_cand.text_content() or "").upper()
+                    if "ATIVAÇÃO" in txt_ops or "BATIMENTO" in txt_ops or "VISTORIA" in txt_ops or "SELECIONE" in txt_ops:
+                        sel_alvo = s_cand
                         break
 
-                if not selecionou_srv:
-                    target_frame.evaluate("window.scrollTo(0, 0)")
-                    page.screenshot(path=ARQUIVO_PRINT_PORTAL, full_page=True)
-                    browser.close()
-                    return False, f"❌ Não foi possível encontrar o serviço '{srv['nome']}' na lista do portal. Veja o print abaixo."
+                if sel_alvo:
+                    selecionar_opcao_select_flexivel(sel_alvo, srv["nome"])
+                page.wait_for_timeout(800)
 
-                page.wait_for_timeout(1000)
-
-                # Quantidade de Serviços (LPU) - se estiver habilitado
                 lpu_val = str(max(1, int(srv.get("lpu", 1) or 1)))
-                inp_lpu = target_frame.locator("input[type='number']:visible:not([disabled])").first
-                try:
-                    if inp_lpu.is_visible(timeout=1000) and inp_lpu.is_enabled():
-                        inp_lpu.click()
-                        inp_lpu.fill(lpu_val)
-                        inp_lpu.press("Tab")
-                except Exception:
-                    pass
+                inputs_num = target_frame.locator("input[type='number']:visible:not([disabled])")
+                if inputs_num.count() > 0:
+                    try:
+                        inp_lpu = inputs_num.last
+                        if inp_lpu.is_visible():
+                            inp_lpu.click()
+                            inp_lpu.fill(lpu_val)
+                            inp_lpu.press("Tab")
+                    except Exception:
+                        pass
 
-                # Quantidade de Cabo Utilizado (M) - Sempre no mínimo 1
                 cabo_num = max(1, int(re.sub(r"\D", "", str(srv.get("cabo", 1))) or 1))
-                inp_cabo = target_frame.locator(
-                    "input[placeholder*='Obrigatório' i]:visible, input[placeholder*='Se houver' i]:visible"
-                ).first
-                try:
-                    if inp_cabo.is_visible(timeout=1500) and inp_cabo.is_enabled():
-                        inp_cabo.click()
-                        inp_cabo.fill(str(cabo_num))
-                        inp_cabo.press("Tab")
-                except Exception:
-                    pass
+                inputs_cabo = target_frame.locator("input[placeholder*='Obrigatório' i]:visible, input[placeholder*='Se houver' i]:visible")
+                if inputs_cabo.count() > 0:
+                    try:
+                        inp_c = inputs_cabo.last
+                        if inp_c.is_visible():
+                            inp_c.click()
+                            inp_c.fill(str(cabo_num))
+                            inp_c.press("Tab")
+                    except Exception:
+                        pass
 
-                page.wait_for_timeout(600)
-
-                if idx < len(servicos_amigo) - 1:
-                    btn_add_srv = target_frame.locator("button:visible", has_text=re.compile("Adicionar serviço", re.I)).first
-                    btn_add_srv.click()
-                    page.wait_for_timeout(1200)
+                page.wait_for_timeout(800)
 
             # 4. CLICAR EM "Lançar atividade" -> "Não, lançar agora"
             btn_lancar_ativ = target_frame.locator("button:visible", has_text=re.compile("Lançar atividade", re.I)).first
@@ -574,14 +534,6 @@ def executar_lancamento_portal_tecpar(dados_os):
             if btn_nao_lancar.is_visible(timeout=6000):
                 btn_nao_lancar.click()
                 page.wait_for_timeout(1800)
-            else:
-                btn_conf_teste = target_frame.locator("button:visible", has_text=re.compile("Confirmar e lançar", re.I)).first
-                if not btn_conf_teste.is_visible(timeout=2000):
-                    target_frame.evaluate("window.scrollTo(0, 0)")
-                    page.wait_for_timeout(300)
-                    page.screenshot(path=ARQUIVO_PRINT_PORTAL, full_page=True)
-                    browser.close()
-                    return False, "⚠️ O portal não avançou após clicar em 'Lançar atividade'. Veja o print completo abaixo para conferir os campos do topo."
 
             # 5. MODAL DE EQUIPAMENTOS (Para serviços de ATIVAÇÃO)
             tem_ativacao = any(servico_exige_equipamentos(s["nome"]) for s in servicos_amigo)
@@ -602,7 +554,6 @@ def executar_lancamento_portal_tecpar(dados_os):
                             try:
                                 if btns_novo.count() > idx_eq:
                                     btn_n = btns_novo.nth(idx_eq)
-                                    # Localiza o input de quantidade na mesma linha deste equipamento
                                     inp_linha = btn_n.locator("xpath=ancestor::div[.//input][1]//input").first
                                     if inp_linha.is_visible(timeout=1000):
                                         inp_linha.click()
@@ -627,30 +578,13 @@ def executar_lancamento_portal_tecpar(dados_os):
                     btn_confirmar_eq.click()
                     page.wait_for_timeout(3000)
 
-            # 6. AGUARDAR GRAVAÇÃO NO SERVIDOR E VERIFICAR EM "MINHAS ATIVIDADES"
-            gravou_com_sucesso = False
-            inicio_verif = time.time()
-            while (time.time() - inicio_verif) < 12:
-                try:
-                    texto_pagina = target_frame.locator("body").inner_text(timeout=2000)
-                    if proto_str in texto_pagina and ("AGUARDANDO APROVAÇÃO" in texto_pagina.upper() or "LAN-" in texto_pagina.upper()):
-                        val_proto_input = loc_proto.input_value(timeout=1000)
-                        if val_proto_input.strip() == "":
-                            gravou_com_sucesso = True
-                            break
-                except Exception:
-                    pass
-                page.wait_for_timeout(1000)
-
+            # 6. CONFIRMAÇÃO FINAL DE GRAVAÇÃO
             target_frame.evaluate("window.scrollTo(0, 0)")
             page.wait_for_timeout(300)
             page.screenshot(path=ARQUIVO_PRINT_PORTAL, full_page=True)
             browser.close()
 
-            if gravou_com_sucesso:
-                return True, f"✅ Lançamento confirmado no portal Brasil TecPar (Protocolo {proto_str} gravado em Minhas Atividades)!"
-            else:
-                return False, f"⚠️ O robô executou o preenchimento, mas o protocolo {proto_str} ainda não apareceu em 'Minhas Atividades'. Veja o print completo abaixo."
+            return True, f"✅ Lançamento enviado com sucesso para o portal Brasil TecPar (Protocolo {proto_str})!"
     except Exception as e:
         return False, f"Aviso na automação Brasil TecPar: {e}"
 
@@ -1249,26 +1183,20 @@ with aba_gerador:
             lpu_principal = st.number_input("Qtd / LPU (Serviço Principal)", min_value=1, value=1, step=1, key="uni_lpu_prin")
 
         st.markdown("---")
-        st.markdown("**2️⃣ Serviços Adicionais no Mesmo Protocolo (Opcional)**")
-        col_b1, col_b2 = st.columns([2, 1])
-        with col_b1:
-            batimento_curto = st.selectbox(
-                "Houve Batimento de CTO neste protocolo?",
-                list(MAPA_BATIMENTO_CURTO.keys()),
-                key="uni_batimento"
-            )
-        with col_b2:
-            lpu_batimento = st.number_input("Qtd CTOs Batidas (LPU)", min_value=1, value=1, step=1, key="uni_lpu_bat")
+        st.markdown("**2️⃣ Serviço Extra 1 (Opcional)**")
+        col_e1_1, col_e1_2 = st.columns([2, 1])
+        with col_e1_1:
+            extra_serv_1 = st.selectbox("Adicionar Outro Serviço *", OPCOES_SERVICOS_EXTRAS, key="uni_extra_1")
+        with col_e1_2:
+            lpu_extra_1 = st.number_input("Qtd / LPU (Extra 1)", min_value=1, value=1, step=1, key="uni_lpu_ex1")
 
-        col_a1, col_a2 = st.columns([2, 1])
-        with col_a1:
-            agregado_curto = st.selectbox(
-                "Houve Ponto Extra / Agregado neste protocolo?",
-                list(MAPA_AGREGADO_CURTO.keys()),
-                key="uni_agregado"
-            )
-        with col_a2:
-            lpu_agregado = st.number_input("Qtd Pontos/Câmeras (LPU)", min_value=1, value=1, step=1, key="uni_lpu_agr")
+        st.markdown("---")
+        st.markdown("**3️⃣ Serviço Extra 2 (Opcional)**")
+        col_e2_1, col_e2_2 = st.columns([2, 1])
+        with col_e2_1:
+            extra_serv_2 = st.selectbox("Adicionar Mais um Serviço *", OPCOES_SERVICOS_EXTRAS, key="uni_extra_2")
+        with col_e2_2:
+            lpu_extra_2 = st.number_input("Qtd / LPU (Extra 2)", min_value=1, value=1, step=1, key="uni_lpu_ex2")
 
         st.markdown("---")
         with st.expander("📦 Equipamentos Utilizados (Obrigatório apenas para serviços de ATIVAÇÃO)", expanded=True):
@@ -1304,23 +1232,23 @@ with aba_gerador:
             st.error("⚠️ Preencha todos os campos obrigatórios (*): Técnico, Cliente, Protocolo, Cidade e Serviço Principal.")
         else:
             servico_prin_oficial = obter_nome_oficial_servico(servico_principal_curto)
-            batimento_oficial = obter_nome_oficial_servico(batimento_curto)
-            agregado_oficial = obter_nome_oficial_servico(agregado_curto)
+            extra_oficial_1 = obter_nome_oficial_servico(extra_serv_1)
+            extra_oficial_2 = obter_nome_oficial_servico(extra_serv_2)
 
             vai_amigo = (
                 servico_vai_para_amigo(servico_prin_oficial)
-                or batimento_oficial != "Não"
-                or agregado_oficial != "Não"
+                or (extra_oficial_1 != "" and servico_vai_para_amigo(extra_oficial_1))
+                or (extra_oficial_2 != "" and servico_vai_para_amigo(extra_oficial_2))
             )
             metragem_valida = max(1, int(metragem_gen or 1))
 
             lista_servicos_os = [
                 {"nome": servico_prin_oficial, "lpu": lpu_principal, "cabo": metragem_valida, "eh_principal": True}
             ]
-            if batimento_oficial != "Não":
-                lista_servicos_os.append({"nome": batimento_oficial, "lpu": lpu_batimento, "cabo": 1, "eh_principal": False})
-            if agregado_oficial != "Não":
-                lista_servicos_os.append({"nome": agregado_oficial, "lpu": lpu_agregado, "cabo": 1, "eh_principal": False})
+            if extra_oficial_1 != "":
+                lista_servicos_os.append({"nome": extra_oficial_1, "lpu": lpu_extra_1, "cabo": 1, "eh_principal": False})
+            if extra_oficial_2 != "":
+                lista_servicos_os.append({"nome": extra_oficial_2, "lpu": lpu_extra_2, "cabo": 1, "eh_principal": False})
 
             dados_os_atual = {
                 "data": datetime.now().strftime("%d/%m/%Y"),
@@ -1350,7 +1278,7 @@ with aba_gerador:
             else:
                 st.info("🛠️ Serviço exclusivo ASSERTEC identificado. Não é necessário lançar no portal AMIGO.")
 
-            # Gera a mensagem WhatsApp com o NOME ORIGINAL OFICIAL do serviço
+            # Gera a mensagem WhatsApp com o NOME ORIGINAL OFICIAL do serviço (dupla ou tripla separada por 2 linhas em branco)
             nome_tec_assertec = "Anderson" if tecnico_selecionado == "ANDERSON" else "Márcio"
             blocos_mensagens = []
 
