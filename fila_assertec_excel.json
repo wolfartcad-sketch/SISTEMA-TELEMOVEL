@@ -118,5 +118,1829 @@
       }
     },
     "obs": "TESTE"
+  },
+  {
+    "data": "06/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTE AUTOMAÇAO 01",
+    "protocolo": "14796324",
+    "cidade": "Ivoti",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "TESTE AUTOMAÇAO 01"
+  },
+  {
+    "data": "06/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTE AUTOMAÇAO",
+    "protocolo": "154236",
+    "cidade": "Alto Feliz",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "teste"
+  },
+  {
+    "data": "06/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTE AUTOMAÇAO 01",
+    "protocolo": "1546321",
+    "cidade": "Ivoti",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": ""
+  },
+  {
+    "data": "06/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTE AUTOMAÇAO 01",
+    "protocolo": "1546321",
+    "cidade": "Ivoti",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": ""
+  },
+  {
+    "data": "06/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTE AUTOMAÇAO 02",
+    "protocolo": "1546322",
+    "cidade": "Ivoti",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      },
+      {
+        "nome": "BATIMENTO DE CAIXA 1X16 PORTAS",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": false
+      },
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO AGREGADO (WIFI/TV/FONE/PONTO EXTRA)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": false
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": ""
+  },
+  {
+    "data": "06/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "AFONSO ARNO ARNHOLD",
+    "protocolo": "169222",
+    "cidade": "Presidente Lucena",
+    "servicos": [
+      {
+        "nome": "Atendimento Presencial - REPARO",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "troca de fonte"
+  },
+  {
+    "data": "06/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "ELIEGE CAVALARI VOLKVEIS",
+    "protocolo": "169514",
+    "cidade": "São Sebastião do Caí",
+    "servicos": [
+      {
+        "nome": "Atendimento Presencial - REPARO",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "sem problema aparente, iptv do cliente estava travando, a tv estava conectada na rede 2.4 e 5g, deixei apenas 1 rede, me disponibilizei pro cliente pra caso aconteça algo vou resolver o mais rapido possivel"
+  },
+  {
+    "data": "06/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "CARLOS ALBERTO FLORES",
+    "protocolo": "21331823",
+    "cidade": "São Sebastião do Caí",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (WIFI/TV/FONE/PONTO EXTRA)",
+        "lpu": 3,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": true,
+        "qtd": 3,
+        "tipo": "Remanufaturado"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "instalado 3 roteadores no cliente"
+  },
+  {
+    "data": "06/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "VITOR FELIPE SCHNEIDER",
+    "protocolo": "21320225",
+    "cidade": "Ivoti",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 110,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "Instalação de internet ficou Huawei X7 Vitor acompanhou \nRede VITOR\nSENHA Vitor26@"
+  },
+  {
+    "data": "06/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "AMG PERTO RS - ASSERTEC",
+    "protocolo": "21323931",
+    "cidade": "Ivoti",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": ""
+  },
+  {
+    "data": "06/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "CARLOS ALBERTO FLORES",
+    "protocolo": "21331823",
+    "cidade": "São Sebastião do Caí",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (WIFI/TV/FONE/PONTO EXTRA)",
+        "lpu": 3,
+        "cabo": 38,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": true,
+        "qtd": 3,
+        "tipo": "Remanufaturado"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "Instalação de 3 pontos adicionais de internet  2 horas de serviço ficou 3 roteador Ax2 mais 38 metros de cabo Rj45 foram usados 6 conectores Rj45 Patrícia nós acompanhou"
+  },
+  {
+    "data": "06/11/2026",
+    "tecnico_exec": "MARCIO",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "CARLOS ALBERTO FLORES",
+    "protocolo": "21331823",
+    "cidade": "São Sebastião do Caí",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (WIFI/TV/FONE/PONTO EXTRA)",
+        "lpu": 1,
+        "cabo": 38,
+        "eh_principal": true
+      },
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO AGREGADO (WIFI/TV/FONE/PONTO EXTRA)",
+        "lpu": 2,
+        "cabo": 1,
+        "eh_principal": false
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": true,
+        "qtd": 3,
+        "tipo": "Remanufaturado"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": ""
+  },
+  {
+    "data": "07/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "LUANA DOS SANTOS RODRIGUES",
+    "protocolo": "21332023",
+    "cidade": "Tupandi",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Remanufaturado"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "troca de endereço, instalado em rede condominio com cabo passado"
+  },
+  {
+    "data": "07/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "VILSON DE LIMA",
+    "protocolo": "21320046",
+    "cidade": "Tupandi",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Remanufaturado"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "troca de endereço, ja tinha cabo passado no local"
+  },
+  {
+    "data": "07/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "CARLOS ALBERTO FLORES",
+    "protocolo": "21331823",
+    "cidade": "São Sebastião do Caí",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO AGREGADO AVULSO (WIFI/TV/FONE/PONTO EXTRA)",
+        "lpu": 1,
+        "cabo": 38,
+        "eh_principal": true
+      },
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO AGREGADO (WIFI/TV/FONE/PONTO EXTRA)",
+        "lpu": 2,
+        "cabo": 1,
+        "eh_principal": false
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": true,
+        "qtd": 3,
+        "tipo": "Remanufaturado"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "teste autonomo"
+  },
+  {
+    "data": "10/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "LUIZ FERNANDO BITTENCOURT",
+    "protocolo": "151088",
+    "cidade": "São José do Hortêncio",
+    "servicos": [
+      {
+        "nome": "Atendimento Presencial - REPARO",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "troca de equipamentos"
+  },
+  {
+    "data": "10/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "LUIZ FERNANDO BITTENCOURT",
+    "protocolo": "151088",
+    "cidade": "São José do Hortêncio",
+    "servicos": [
+      {
+        "nome": "Atendimento Presencial - REPARO",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "troca de equipamentos"
+  },
+  {
+    "data": "10/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "LUIZ FERNANDO BITTENCOURT",
+    "protocolo": "151088",
+    "cidade": "São José do Hortêncio",
+    "servicos": [
+      {
+        "nome": "Atendimento Presencial - REPARO",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "troca de equipamentos"
+  },
+  {
+    "data": "10/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "LUIZ FERNANDO BITTENCOURT",
+    "protocolo": "151088",
+    "cidade": "São José do Hortêncio",
+    "servicos": [
+      {
+        "nome": "Atendimento Presencial - REPARO",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "troca de equipamentos"
+  },
+  {
+    "data": "10/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "ROSELI DOS SANTOS LEITE GABARDO",
+    "protocolo": "152026",
+    "cidade": "São Sebastião do Caí",
+    "servicos": [
+      {
+        "nome": "Atendimento Presencial - REPARO - ROMPIMENTO/LANÇAMENTO até 500 mt",
+        "lpu": 1,
+        "cabo": 15,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "cabo rompido por caçamba"
+  },
+  {
+    "data": "10/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTE 4",
+    "protocolo": "12121214",
+    "cidade": "Ivoti",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "teste"
+  },
+  {
+    "data": "10/11/2026",
+    "tecnico_exec": "MARCIO",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTE 2",
+    "protocolo": "12121213",
+    "cidade": "Feliz",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "teste 2"
+  },
+  {
+    "data": "10/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTE",
+    "protocolo": "12121212",
+    "cidade": "Feliz",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 100,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "teste sem lançar equipamentos"
+  },
+  {
+    "data": "10/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTE 7",
+    "protocolo": "12121217",
+    "cidade": "Feliz",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 100,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Remanufaturado"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "teste sem lançar equipamentos"
+  },
+  {
+    "data": "10/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTE11",
+    "protocolo": "12121221",
+    "cidade": "Alto Feliz",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "testes"
+  },
+  {
+    "data": "10/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTE ALPHA",
+    "protocolo": "22222222",
+    "cidade": "Ivoti",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "final"
+  },
+  {
+    "data": "10/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTE FINAL",
+    "protocolo": "22222278",
+    "cidade": "Harmonia",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "testando"
+  },
+  {
+    "data": "10/11/2026",
+    "tecnico_exec": "ANDERSON",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTANDO",
+    "protocolo": "11111111",
+    "cidade": "Feliz",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "teste"
+  },
+  {
+    "data": "10/11/2026",
+    "tecnico_exec": "MARCIO",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTE",
+    "protocolo": "12345675432",
+    "cidade": "São José do Hortêncio",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "testes"
+  },
+  {
+    "data": "11/11/2026",
+    "tecnico_exec": "BRUNO",
+    "tecnico_portal": "ANDERSON WOLFART",
+    "mercado": "AMIGO - VAREJO",
+    "cliente": "TESTE TESTE",
+    "protocolo": "12457896",
+    "cidade": "São José do Hortêncio",
+    "servicos": [
+      {
+        "nome": "ATIVAÇÃO DE SERVIÇO - ACESSO À INTERNET (0 ~ 300 MT)",
+        "lpu": 1,
+        "cabo": 1,
+        "eh_principal": true
+      }
+    ],
+    "equipamentos": {
+      "ONU": {
+        "usou": true,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Roteador": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Switch": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Câmera": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Setup box": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Fire Stick": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "Aparelho de telefone": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      },
+      "ATA": {
+        "usou": false,
+        "qtd": 1,
+        "tipo": "Novo"
+      }
+    },
+    "obs": "testes"
   }
 ]

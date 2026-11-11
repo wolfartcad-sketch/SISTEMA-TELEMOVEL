@@ -1,0 +1,6 @@
+.streamlit/
+beckup. app.y antigo/
+sessao_salesforce/
+__pycache__/
+*.pyc
+*.png
