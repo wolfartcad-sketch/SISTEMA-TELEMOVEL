@@ -51,11 +51,19 @@ from modulo_assertec import (
     mapear_para_assertec,
     salvar_na_fila_assertec,
 )
-from modulo_planilhas import registrar_servico_na_planilha_tecnico
+from modulo_planilhas import (
+    registrar_servico_na_planilha_tecnico,
+    sincronizar_status_e_auditar_planilhas,
+    iniciar_agendador_12h_21h,
+    carregar_log_auto_sync,
+    exibir_painel_financeiro_exclusivo,
+)
+iniciar_agendador_12h_21h()
 from modulo_robos import (
     carregar_agenda_sf_cache,
     sincronizar_agenda_salesforce,
     executar_lancamento_amigo_seguro,
+    buscar_status_portal_amigo_sob_demanda,
 )
 
 # ==============================================================================
@@ -226,6 +234,7 @@ else:
 # ==============================================================================
 if aba_gestao is not None:
     with aba_gestao:
+        exibir_painel_financeiro_exclusivo()
         def limpar_campo():
             st.session_state["msg_input"] = ""
             st.session_state["mensagem_processada"] = False
@@ -450,6 +459,16 @@ if aba_gestao is not None:
         )
 
         if st.button("🔍 Conferir Assertec", key="btn_conf_ass_topo_key"):
+            st.markdown("---")
+        st.subheader("🔄 Atualização Automática de Status & Pente-Fino (Amigo + Assertec)")
+        info_auto = carregar_log_auto_sync()
+        st.caption(f"⏰ **Leitura Automática Programada (12h e 21h):** Última execução em `{info_auto['horario_execucao']}` — {info_auto['resumo']}")
+        if st.button("🔄 Sincronizar Status das Planilhas e Auditar Assertec", type="primary", use_container_width=True):
+            with st.spinner("🤖 Lendo status no Portal Amigo e cruzando com a planilha da Assertec..."):
+                ok_am, msg_am, mapa_am = buscar_status_portal_amigo_sob_demanda()
+                if not ok_am:
+                    st.warning(msg_am)
+                sincronizar_status_e_auditar_planilhas(mapa_amigo=mapa_am, silencioso=False)
             if not termo_pesquisa_global.strip():
                 st.warning("Insira o nome de um cliente ou protocolo na caixa de pesquisa.")
             else:
@@ -643,19 +662,26 @@ Obs: {obs_gen.strip()}"""
             # 3º PASSO: Avisa que o protocolo já foi enviado e pode fechar ou aguardar
             st.info("✅ Protocolo enviado! Já pode fechar a página, mas se preferir pode aguardar o relatório do lançamento abaixo.")
 
-            # 4º PASSO: Executa o lançamento em 2º plano blindado no Portal Brasil TecPar (AMIGO)
+            # 4º PASSO: Executa o lançamento em 2º plano blindado (Formulário Assertec + Portal Amigo)
+            with st.spinner("🤖 Enviando para o Formulário Assertec e Portal Brasil TecPar (AMIGO)..."):
+                ok_tecpar, msg_tecpar, ok_assertec, msg_assertec = executar_lancamento_amigo_seguro(dados_os_atual)
+
+            if ok_assertec:
+                st.success(msg_assertec)
+            else:
+                st.error(msg_assertec)
+
             if vai_amigo:
-                with st.spinner("🤖 Lançando em segundo plano no portal Brasil TecPar (AMIGO)..."):
-                    ok_tecpar, msg_tecpar = executar_lancamento_amigo_seguro(dados_os_atual)
                 if ok_tecpar:
                     st.success(f"🟢 SERVIÇO CONFIRMADO NO SISTEMA AMIGO! ({msg_tecpar})")
+                    sincronizar_status_e_auditar_planilhas(silencioso=True)
                 else:
                     st.warning(msg_tecpar)
                 if os.path.exists(ARQUIVO_PRINT_PORTAL):
                     with st.expander("📸 Ver Print da Tela do Portal Brasil TecPar (Conferência Visual)", expanded=not ok_tecpar):
                         st.image(ARQUIVO_PRINT_PORTAL, caption="Tela final do portal Brasil TecPar após a execução do robô")
             else:
-                st.success("🟢 SERVIÇO EXCLUSIVO ASSERTEC CONCLUÍDO!")
+                sincronizar_status_e_auditar_planilhas(silencioso=True)
 
 # ==============================================================================
 # ABA 3: CENTRAL DE AGENDAMENTOS (PC & SMARTPHONE)

@@ -19,6 +19,7 @@ from config import (
     PASTA_SESSAO_SF,
     ARQUIVO_PRINT_SF,
     ARQUIVO_CACHE_SF,
+    ASSERTEC_FORM_URL,
 )
 from modulo_assertec import (
     JUSTIFICATIVA_PADRAO_TECPAR,
@@ -27,6 +28,7 @@ from modulo_assertec import (
     EQUIPAMENTOS_LISTA,
     servico_vai_para_amigo,
     servico_exige_equipamentos,
+    limpar_protocolo_str, mapear_para_assertec,
 )
 
 # Controle global de instalação do navegador (seguro para rodar em 2º plano sem travar threads)
@@ -691,3 +693,478 @@ def executar_lancamento_amigo_seguro(dados_os):
         time.sleep(0.3)
 
     return resultado["ok"], resultado["msg"]
+
+ULTIMOS_STATUS_AMIGO = {}
+
+def extrair_status_minhas_atividades(target_frame):
+    """
+    Varre a tabela 'Minhas Atividades' do Portal Brasil TecPar (Amigo)
+    e retorna um dicionário {protocolo: status} reconhecendo 'PAGAMENTO AUTORIZADO'.
+    """
+    js_status = """
+    () => {
+        const resultado = {};
+        const norm = (s) => (s || '').toUpperCase().trim();
+        const linhas = Array.from(document.querySelectorAll('tr, .card, .list-group-item'));
+
+        for (const el of linhas) {
+            const txt = norm(el.innerText || '');
+            if (!txt || txt.length < 15 || txt.length > 2000) continue;
+
+            let statusAchado = '';
+            if (txt.includes('AGUARDANDO APROVA') || txt.includes('EM ANALISE') || txt.includes('EM ANÁLISE')) {
+                statusAchado = 'AGUARDANDO APROVAÇÃO';
+            } else if (txt.includes('REPROVAD') || txt.includes('RECUSAD') || txt.includes('REJEITAD') || txt.includes('CANCELAD')) {
+                statusAchado = 'REPROVADO';
+            } else if (txt.includes('PAGAMENTO AUTORIZADO') || txt.includes('AUTORIZADO') || txt.includes('APROVAD')) {
+                statusAchado = 'APROVADO';
+            }
+
+            if (!statusAchado) continue;
+
+            // 1º Captura explícita no padrão "Protocolo 180573"
+            const matchExplicito = txt.match(/PROTOCOLO\\s*:?\\s*(\\d{4,14})/g);
+            if (matchExplicito) {
+                for (const m of matchExplicito) {
+                    const num = m.replace(/\\D/g, '');
+                    if (num) resultado[num] = statusAchado;
+                }
+            }
+
+            // 2º Captura números de protocolo de 5 a 12 dígitos na linha
+            const todosNumeros = txt.match(/\\b\\d{5,12}\\b/g);
+            if (todosNumeros) {
+                for (const n of todosNumeros) {
+                    resultado[n] = statusAchado;
+                }
+            }
+        }
+        return resultado;
+    }
+    """
+    try:
+        mapa = target_frame.evaluate(js_status)
+        if isinstance(mapa, dict):
+            ULTIMOS_STATUS_AMIGO.update(mapa)
+            return mapa
+    except Exception:
+        pass
+    return {}
+
+    try:
+        mapa = target_frame.evaluate(js_status)
+        if isinstance(mapa, dict):
+            ULTIMOS_STATUS_AMIGO.update(mapa)
+            return mapa
+    except Exception:
+        pass
+    return {}
+
+def buscar_status_portal_amigo_sob_demanda():
+    """Abre o Portal Amigo em 2º plano apenas para ler os status atuais de Minhas Atividades."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return False, "Biblioteca Playwright não instalada.", {}
+
+    garantir_instalacao_chromium()
+
+    with _LOCK_ROBO_AMIGO:
+        try:
+            with sync_playwright() as p:
+                browser = iniciar_browser_playwright(p)
+                context = browser.new_context(viewport={"width": 1366, "height": 2200})
+                page = context.new_page()
+                page.goto(TECPAR_PORTAL_URL, timeout=60000, wait_until="domcontentloaded")
+
+                target_frame = obter_frame_interno_gas(page, timeout_ms=20000)
+
+                campo_pass_vis = target_frame.locator("input[type='password']:visible").first
+                try:
+                    campo_pass_vis.wait_for(state="visible", timeout=5000)
+                    campo_user_vis = target_frame.locator(
+                        "input:visible:not([type='password']):not([type='hidden']):not([type='checkbox']):not([type='radio'])"
+                    ).first
+                    campo_user_vis.fill(TECPAR_USER)
+                    campo_pass_vis.fill(TECPAR_PASS)
+                    target_frame.locator("button:visible", has_text=re.compile(r"^\s*Entrar\s*$", re.I)).first.click()
+                except Exception:
+                    pass
+
+                inicio_painel = time.time()
+                while (time.time() - inicio_painel) < 22:
+                    target_frame = obter_frame_interno_gas(page, timeout_ms=2500)
+                    cand = target_frame.locator("button:visible", has_text=re.compile("Lançar atividade", re.I)).first
+                    try:
+                        if cand.is_visible():
+                            break
+                    except Exception:
+                        pass
+                    page.wait_for_timeout(200)
+
+                page.wait_for_timeout(1500)
+                mapa = extrair_status_minhas_atividades(target_frame)
+                browser.close()
+                return True, f"{len(mapa)} protocolo(s) lido(s) em Minhas Atividades.", mapa
+        except Exception as e:
+            return False, f"Erro ao consultar Portal Amigo: {e}", {}
+
+        # ==============================================================================
+# ==============================================================================
+# ==============================================================================
+# ROBÔ 3: FORMULÁRIO GOOGLE ASSERTEC (ENVIO DIRETO + PLAYWRIGHT COM SCROLL POPUP)
+# ==============================================================================
+def normalizar_numero_metragem_assertec(nome_servico_assertec, cabo_bruto, lpu_bruto, eh_principal=True):
+    """
+    Garante que o campo 'Quantidade / Metragem / Km' receba APENAS números inteiros puros (mínimo 1).
+    """
+    srv_up = str(nome_servico_assertec or "").upper()
+    eh_multi = any(
+        termo in srv_up
+        for termo in ["AGREGADO", "AVULSO", "BATIMENTO", "CTO", "DIÁRIA", "DIARIA", "KM", "DESLOCAMENTO"]
+    )
+
+    if eh_multi or not eh_principal:
+        num_str = re.sub(r"\D", "", str(lpu_bruto if not eh_principal else (cabo_bruto or lpu_bruto or 1)))
+        val = int(num_str) if num_str else 1
+        return str(max(1, val))
+    else:
+        num_str = re.sub(r"\D", "", str(cabo_bruto or 0))
+        val = int(num_str) if num_str else 0
+        return str(max(1, val))
+
+
+def _sem_acento_upper(texto):
+    import unicodedata
+    s = "".join(c for c in unicodedata.normalize("NFD", str(texto or "")) if unicodedata.category(c) != "Mn")
+    return re.sub(r"\s+", " ", s.upper()).strip()
+
+
+def _escolher_opcao_exata_forms(valor_desejado, opcoes_disponiveis):
+    """Compara o valor com a lista oficial de opções do Google Forms e devolve o texto idêntico."""
+    if not opcoes_disponiveis:
+        return str(valor_desejado or "").strip()
+
+    alvo = _sem_acento_upper(valor_desejado)
+
+    # 1. Correspondência exata (ignorando acentos e maiúsculas/minúsculas)
+    for op in opcoes_disponiveis:
+        if _sem_acento_upper(op) == alvo:
+            return op
+
+    # 2. Regra específica para Desativação / Retirada (singular ou plural)
+    if "DESATIVA" in alvo or "RETIRADA" in alvo:
+        for op in opcoes_disponiveis:
+            op_n = _sem_acento_upper(op)
+            if "DESATIVA" in op_n or "RETIRADA" in op_n:
+                return op
+
+    # 3. Correspondência por inclusão parcial
+    for op in opcoes_disponiveis:
+        op_norm = _sem_acento_upper(op)
+        if len(alvo) >= 4 and (alvo in op_norm or op_norm in alvo):
+            return op
+
+    # 4. Correspondência por palavras em comum
+    palavras_alvo = [w for w in re.split(r"\W+", alvo) if len(w) >= 3]
+    melhor_op = None
+    maior_score = 0
+    for op in opcoes_disponiveis:
+        op_norm = _sem_acento_upper(op)
+        score = sum(1 for w in palavras_alvo if w in op_norm)
+        if score > maior_score:
+            maior_score = score
+            melhor_op = op
+
+    if melhor_op and maior_score >= 2:
+        return melhor_op
+
+    return str(valor_desejado or "").strip()
+
+
+def preencher_item_google_forms(page, container, valor_alvo):
+    val_str = str(valor_alvo or "").strip()
+    if not val_str:
+        return False
+
+    alvo_norm = _sem_acento_upper(val_str)
+
+    # 1. Campo de Data (input[type='date'] ou campos separados de Dia/Mês/Ano)
+    inp_date = container.locator("input[type='date']")
+    if inp_date.count() > 0:
+        try:
+            campo_dt = inp_date.first
+            campo_dt.fill(val_str)
+            campo_dt.dispatch_event("input")
+            campo_dt.dispatch_event("change")
+            campo_dt.evaluate("el => el.blur()")
+            return True
+        except Exception:
+            pass
+
+    inp_dia = container.locator("input[aria-label*='Dia'], input[aria-label*='Day']")
+    inp_mes = container.locator("input[aria-label*='Mês'], input[aria-label*='Mes'], input[aria-label*='Month']")
+    inp_ano = container.locator("input[aria-label*='Ano'], input[aria-label*='Year']")
+    if inp_dia.count() > 0 and inp_mes.count() > 0 and inp_ano.count() > 0:
+        try:
+            partes = val_str.split("-")
+            if len(partes) == 3:
+                inp_ano.first.fill(partes[0])
+                inp_mes.first.fill(partes[1])
+                inp_dia.first.fill(partes[2])
+                return True
+        except Exception:
+            pass
+
+    # 2. Radio buttons (Técnico, Empresa, etc.)
+    radios = container.locator("[role='radio']")
+    if radios.count() > 0:
+        textos_radios = []
+        for i in range(radios.count()):
+            r = radios.nth(i)
+            dv = r.get_attribute("data-value") or r.get_attribute("aria-label") or r.inner_text()
+            textos_radios.append(str(dv or "").strip())
+
+        melhor_radio = _sem_acento_upper(_escolher_opcao_exata_forms(val_str, textos_radios))
+        for i in range(radios.count()):
+            r = radios.nth(i)
+            dv = _sem_acento_upper(r.get_attribute("data-value") or r.get_attribute("aria-label") or r.inner_text())
+            if dv == melhor_radio or dv == alvo_norm:
+                r.scroll_into_view_if_needed()
+                if r.get_attribute("aria-checked") != "true":
+                    r.click(timeout=4000)
+                page.wait_for_timeout(150)
+                return True
+
+    # 3. Dropdown Listbox (foca exclusivamente no menu popup aberto V68bde / exportSelectPopup)
+    listbox = container.locator("[role='listbox']")
+    if listbox.count() > 0:
+        try:
+            listbox.first.scroll_into_view_if_needed()
+            listbox.first.click(timeout=4000)
+            page.wait_for_timeout(500)
+
+            popup_opcoes = container.locator("div[jsname='V68bde'] div[role='option'], .exportSelectPopup div[role='option']")
+            if popup_opcoes.count() == 0:
+                popup_opcoes = page.locator("div[jsname='V68bde']:visible div[role='option'], .exportSelectPopup:visible div[role='option']")
+
+            lista_textos = []
+            for i in range(popup_opcoes.count()):
+                op = popup_opcoes.nth(i)
+                txt = str(op.get_attribute("data-value") or op.inner_text() or "").strip()
+                if txt and "ESCOLHER" not in _sem_acento_upper(txt) and "SELECIONE" not in _sem_acento_upper(txt):
+                    lista_textos.append(txt)
+
+            escolhido_norm = _sem_acento_upper(_escolher_opcao_exata_forms(val_str, lista_textos))
+
+            for i in range(popup_opcoes.count()):
+                op = popup_opcoes.nth(i)
+                txt_op = _sem_acento_upper(op.get_attribute("data-value") or op.inner_text())
+                if not txt_op or "ESCOLHER" in txt_op or "SELECIONE" in txt_op:
+                    continue
+                if txt_op == escolhido_norm or txt_op == alvo_norm:
+                    op.evaluate("el => el.scrollIntoView({block: 'center'})")
+                    page.wait_for_timeout(150)
+                    op.click(timeout=4000)
+                    page.wait_for_timeout(350)
+                    return True
+
+            page.keyboard.press("Escape")
+        except Exception:
+            try:
+                page.keyboard.press("Escape")
+            except Exception:
+                pass
+
+    # 4. Campo de Texto / Número / Observação
+    inp_txt = container.locator("input[type='text'], input[type='number'], input:not([type]), textarea")
+    if inp_txt.count() > 0:
+        try:
+            campo = inp_txt.first
+            campo.scroll_into_view_if_needed()
+            campo.click(timeout=3000)
+            campo.fill(val_str)
+            campo.dispatch_event("input")
+            campo.dispatch_event("change")
+            campo.evaluate("el => el.blur()")
+            return True
+        except Exception:
+            pass
+
+    return False
+
+
+def enviar_formulario_assertec_playwright(dados_os):
+    """
+    Envia os serviços da OS diretamente para o Google Forms da Assertec em uma única requisição,
+    validando que as perguntas do formulário ('role="listitem"') deram lugar à tela de confirmação.
+    """
+    import requests as req_http
+
+    protocolo_limpo = re.sub(r"\.0+$", "", str(dados_os.get("protocolo", "")).strip())
+    protocolo_limpo = re.sub(r"\D", "", protocolo_limpo)
+    cliente_nome = str(dados_os.get("cliente", "")).strip().upper()
+    cidade_nome = str(dados_os.get("cidade", "")).strip()
+    obs_texto = str(dados_os.get("obs", "")).strip() or "Atendimento concluído com sucesso"
+    mercado = dados_os.get("mercado", "AMIGO - VAREJO")
+
+    tecnico_raw = str(dados_os.get("tecnico_exec", "ANDERSON")).upper()
+    if "ANDERSON" in tecnico_raw:
+        nome_tecnico = "Anderson"
+    elif "BRUNO" in tecnico_raw:
+        nome_tecnico = "Bruno"
+    else:
+        nome_tecnico = "Marcio"
+
+    data_str = str(dados_os.get("data", datetime.now().strftime("%d/%m/%Y")))[:10]
+    dt = None
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            dt = datetime.strptime(data_str, fmt)
+            break
+        except ValueError:
+            continue
+    if not dt:
+        dt = datetime.now()
+
+    servicos_os = dados_os.get("servicos", [])
+    if not servicos_os and dados_os.get("servico"):
+        servicos_os = [{
+            "nome": dados_os.get("servico"),
+            "cabo": dados_os.get("cabo", 1),
+            "lpu": 1,
+            "eh_principal": True
+        }]
+
+    try:
+        sess = req_http.Session()
+        resp_get = sess.get(ASSERTEC_FORM_URL, timeout=15)
+        html_form = resp_get.text
+        url_post = resp_get.url.split("?")[0]
+        if "/viewform" in url_post:
+            url_post = url_post.replace("/viewform", "/formResponse")
+        elif not url_post.endswith("/formResponse"):
+            url_post = url_post.rstrip("/") + "/formResponse"
+
+        match_fbzx = re.search(r'name="fbzx"\s+value="([^"]+)"', html_form)
+        fbzx_val = match_fbzx.group(1) if match_fbzx else ""
+
+        match_data = re.search(r"FB_PUBLIC_LOAD_DATA_\s*=\s*(\[.*?\]);\s*</script>", html_form, re.S)
+        if not match_data:
+            return False, "⚠️ Não foi possível ler a estrutura do Formulário Assertec."
+
+        form_json = json.loads(match_data.group(1))
+        perguntas = form_json[1][1] if (len(form_json) > 1 and form_json[1] and len(form_json[1]) > 1) else []
+
+        campos_mapeados = []
+        qtd_secoes = 0
+        for item in perguntas:
+            if not isinstance(item, list) or len(item) < 4:
+                continue
+            titulo_q = str(item[1] or "")
+            tipo_q = item[3]
+            if tipo_q == 8:
+                qtd_secoes += 1
+                continue
+            if len(item) > 4 and isinstance(item[4], list) and len(item[4]) > 0:
+                sub = item[4][0]
+                entry_id = sub[0]
+                opcoes_q = []
+                if len(sub) > 1 and isinstance(sub[1], list):
+                    opcoes_q = [str(opt[0]) for opt in sub[1] if isinstance(opt, list) and len(opt) > 0 and opt[0]]
+                campos_mapeados.append({
+                    "titulo": _sem_acento_upper(titulo_q),
+                    "tipo": tipo_q,
+                    "entry_id": entry_id,
+                    "opcoes": opcoes_q
+                })
+
+        page_history = ",".join(str(i) for i in range(qtd_secoes + 1))
+        enviados_http = 0
+        erros = []
+
+        for srv in servicos_os:
+            nome_srv_assertec = mapear_para_assertec(srv.get("nome", ""), mercado)
+            qtd_numerica = normalizar_numero_metragem_assertec(
+                nome_srv_assertec,
+                srv.get("cabo", 1),
+                srv.get("lpu", 1),
+                srv.get("eh_principal", True)
+            )
+
+            payload = {"fvv": "1", "pageHistory": page_history}
+            if fbzx_val:
+                payload["fbzx"] = fbzx_val
+
+            for c in campos_mapeados:
+                tit = c["titulo"]
+                eid = c["entry_id"]
+                opcoes = c["opcoes"]
+
+                if "DATA" in tit:
+                    payload[f"entry.{eid}_year"] = str(dt.year)
+                    payload[f"entry.{eid}_month"] = str(dt.month)
+                    payload[f"entry.{eid}_day"] = str(dt.day)
+                elif "TECNICO" in tit:
+                    payload[f"entry.{eid}"] = _escolher_opcao_exata_forms(nome_tecnico, opcoes)
+                elif "EMPRESA" in tit:
+                    payload[f"entry.{eid}"] = _escolher_opcao_exata_forms("Fibrawer", opcoes)
+                elif "CLIENTE" in tit:
+                    payload[f"entry.{eid}"] = cliente_nome
+                elif "PROTOCOLO" in tit:
+                    payload[f"entry.{eid}"] = protocolo_limpo
+                elif "CIDADE" in tit:
+                    payload[f"entry.{eid}"] = _escolher_opcao_exata_forms(cidade_nome, opcoes)
+                elif "SERVICO" in tit:
+                    payload[f"entry.{eid}"] = _escolher_opcao_exata_forms(nome_srv_assertec, opcoes)
+                elif "QUANTIDADE" in tit or "METRAGEM" in tit or "KM" in tit:
+                    payload[f"entry.{eid}"] = qtd_numerica
+                elif "OBSERVA" in tit:
+                    payload[f"entry.{eid}"] = obs_texto
+
+            r1 = sess.post(url_post, data=payload, timeout=15)
+
+            # Na página de resposta gravada com sucesso, os blocos de perguntas (role="listitem") desaparecem
+            if r1.status_code == 200 and 'role="listitem"' not in r1.text and 'role="alert"' not in r1.text:
+                enviados_http += 1
+            else:
+                erros.append(f"Recusado pelo formulário para {nome_srv_assertec}")
+
+        if enviados_http == len(servicos_os):
+            return True, f"🟢 {enviados_http} serviço(s) gravado(s) e confirmado(s) na Planilha Assertec (Fibrawer)!"
+        else:
+            return False, f"⚠️ Enviados {enviados_http}/{len(servicos_os)} na Assertec. Detalhes: {', '.join(erros)}"
+
+    except Exception as e:
+        return False, f"⚠️ Erro ao enviar para o Formulário Assertec: {e}"
+
+
+def executar_lancamento_amigo_seguro(dados_os):
+    """
+    Dispara em segundo plano (Thread independente):
+    1. O envio do Formulário Google da Assertec (gravando na planilha Fibrawer).
+    2. O lançamento no Portal Brasil TecPar (Amigo), se aplicável.
+    """
+    resultado = {
+        "ok": False,
+        "msg": "Em processamento...",
+        "ok_assertec": False,
+        "msg_assertec": ""
+    }
+
+    def _worker():
+        ok_ass, msg_ass = enviar_formulario_assertec_playwright(dados_os)
+        resultado["ok_assertec"] = ok_ass
+        resultado["msg_assertec"] = msg_ass
+
+        ok_am, msg_am = executar_lancamento_portal_tecpar(dados_os)
+        resultado["ok"] = ok_am
+        resultado["msg"] = msg_am
+
+    t = threading.Thread(target=_worker, daemon=False)
+    t.start()
+
+    while t.is_alive():
+        time.sleep(0.2)
+
+    return resultado["ok"], resultado["msg"], resultado["ok_assertec"], resultado["msg_assertec"]

@@ -31,3 +31,6 @@ COLUNAS_PADRAO_AG = ["DATA", "CLIENTE", "PROTOCOLO", "CIDADE", "OBS"]
 PASTA_SESSAO_SF = os.path.join(os.getcwd(), "sessao_salesforce")
 ARQUIVO_PRINT_SF = "ultimo_print_salesforce.png"
 ARQUIVO_CACHE_SF = "agenda_salesforce_cache.json"
+ASSERTEC_PLANILHA_URL = obter_segredo("https://docs.google.com/spreadsheets/d/1MMQ8PAjr2GQfWxPnfYNfHSiiu9AUdE0pvfJikSGQgqU/edit?usp=sharing", "")
+ASSERTEC_FORM_URL = obter_segredo("ASSERTEC_FORM_URL", "https://forms.gle/2MENn9xuKjj7pKVm6")
+SENHA_FINANCEIRO = obter_segredo("SENHA_FINANCEIRO", "")
