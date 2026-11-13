@@ -34,3 +34,31 @@ ARQUIVO_CACHE_SF = "agenda_salesforce_cache.json"
 ASSERTEC_PLANILHA_URL = obter_segredo("https://docs.google.com/spreadsheets/d/1MMQ8PAjr2GQfWxPnfYNfHSiiu9AUdE0pvfJikSGQgqU/edit?usp=sharing", "")
 ASSERTEC_FORM_URL = obter_segredo("ASSERTEC_FORM_URL", "https://forms.gle/2MENn9xuKjj7pKVm6")
 SENHA_FINANCEIRO = obter_segredo("SENHA_FINANCEIRO", "")
+SF_URL = obter_segredo("SF_URL", "https://prod-brasiltecpar.my.salesforce.com")
+
+SF_CREDENCIAIS_TECNICOS = {
+    "ANDERSON": {
+        "user": obter_segredo("SF_USER_ANDERSON", ""),
+        "pass": obter_segredo("SF_PASS_ANDERSON", ""),
+        "nome_assinatura": "Anderson Wolfart Möllerke",
+        "whatsapp_fone": obter_segredo("WHATSAPP_FONE_ANDERSON", ""),
+        "whatsapp_apikey": obter_segredo("WHATSAPP_APIKEY_ANDERSON", ""),
+    },
+    "MARCIO": {
+        "user": obter_segredo("SF_USER_MARCIO", ""),
+        "pass": obter_segredo("SF_PASS_MARCIO", ""),
+        "nome_assinatura": "Márcio",
+        "whatsapp_fone": obter_segredo("WHATSAPP_FONE_MARCIO", ""),
+        "whatsapp_apikey": obter_segredo("WHATSAPP_APIKEY_MARCIO", ""),
+    },
+    "BRUNO": {
+        "user": obter_segredo("SF_USER_BRUNO", ""),
+        "pass": obter_segredo("SF_PASS_BRUNO", ""),
+        "nome_assinatura": "Bruno",
+        "whatsapp_fone": obter_segredo("WHATSAPP_FONE_BRUNO", ""),
+        "whatsapp_apikey": obter_segredo("WHATSAPP_APIKEY_BRUNO", ""),
+    },
+}
+
+ARQUIVO_PRINT_SF_ENCERRAMENTO = "debug_sf_encerramento.png"
+PASTA_FOTOS_TEMP_SF = "fotos_temp_sf"

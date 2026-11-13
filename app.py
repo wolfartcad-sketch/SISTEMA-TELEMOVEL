@@ -145,6 +145,7 @@ def normalizar_lista_agendamentos(lista_bruta):
             lista_limpa.append(novo)
     return lista_limpa
 
+
 def salvar_backup_csv(lista):
     try:
         with open(ARQUIVO_AGENDAMENTOS_LOCAL, mode="w", encoding="utf-8", newline="") as f:
@@ -155,9 +156,11 @@ def salvar_backup_csv(lista):
     except Exception:
         pass
 
+
 def ler_csv_texto(conteudo_csv):
     leitor = csv.DictReader(io.StringIO(conteudo_csv))
     return normalizar_lista_agendamentos(list(leitor))
+
 
 def buscar_agendamentos_remoto():
     try:
@@ -177,15 +180,18 @@ def buscar_agendamentos_remoto():
                 pass
     return []
 
+
 def obter_df_agendamentos():
     if "df_agendamentos_mem" not in st.session_state:
         st.session_state["df_agendamentos_mem"] = buscar_agendamentos_remoto()
     return st.session_state["df_agendamentos_mem"]
 
+
 def atualizar_memoria_e_backup(lista_nova):
     lista_limpa = normalizar_lista_agendamentos(lista_nova)
     st.session_state["df_agendamentos_mem"] = lista_limpa
     salvar_backup_csv(lista_limpa)
+
 
 def enviar_post_sheets(payload):
     if not GOOGLE_SCRIPT_URL.strip():
@@ -202,6 +208,7 @@ def enviar_post_sheets(payload):
     except Exception as e:
         return False, f"Aviso Google Sheets: {e}"
 
+
 def extrair_data_da_linha(row):
     val_data = str(row.get("DATA", "")).strip()
     if re.search(r"\d{2}/\d{2}/\d{4}", val_data):
@@ -212,6 +219,7 @@ def extrair_data_da_linha(row):
     if match:
         return match.group(1)
     return val_data
+
 
 # ==============================================================================
 # CRIAÇÃO DAS ABAS PRINCIPAIS
@@ -235,6 +243,7 @@ else:
 if aba_gestao is not None:
     with aba_gestao:
         exibir_painel_financeiro_exclusivo()
+
         def limpar_campo():
             st.session_state["msg_input"] = ""
             st.session_state["mensagem_processada"] = False
@@ -459,16 +468,6 @@ if aba_gestao is not None:
         )
 
         if st.button("🔍 Conferir Assertec", key="btn_conf_ass_topo_key"):
-            st.markdown("---")
-        st.subheader("🔄 Atualização Automática de Status & Pente-Fino (Amigo + Assertec)")
-        info_auto = carregar_log_auto_sync()
-        st.caption(f"⏰ **Leitura Automática Programada (12h e 21h):** Última execução em `{info_auto['horario_execucao']}` — {info_auto['resumo']}")
-        if st.button("🔄 Sincronizar Status das Planilhas e Auditar Assertec", type="primary", use_container_width=True):
-            with st.spinner("🤖 Lendo status no Portal Amigo e cruzando com a planilha da Assertec..."):
-                ok_am, msg_am, mapa_am = buscar_status_portal_amigo_sob_demanda()
-                if not ok_am:
-                    st.warning(msg_am)
-                sincronizar_status_e_auditar_planilhas(mapa_amigo=mapa_am, silencioso=False)
             if not termo_pesquisa_global.strip():
                 st.warning("Insira o nome de um cliente ou protocolo na caixa de pesquisa.")
             else:
@@ -491,8 +490,27 @@ if aba_gestao is not None:
                     except Exception:
                         st.warning("Não foi possível ler a planilha automaticamente.")
 
+        st.markdown("---")
+        st.subheader("🔄 Atualização Automática de Status & Pente-Fino (Amigo + Assertec)")
+        placeholder_horario = st.empty()
+        info_auto = carregar_log_auto_sync()
+        placeholder_horario.caption(
+            f"⏰ **Leitura Automática Programada (12h e 21h):** Última execução em `{info_auto['horario_execucao']}` — {info_auto['resumo']}"
+        )
+
+        if st.button("🔄 Sincronizar Status das Planilhas e Auditar Assertec", type="primary", use_container_width=True):
+            with st.spinner("🤖 Lendo status no Portal Amigo e cruzando com a planilha da Assertec..."):
+                ok_am, msg_am, mapa_am = buscar_status_portal_amigo_sob_demanda()
+                if not ok_am:
+                    st.warning(msg_am)
+                sincronizar_status_e_auditar_planilhas(mapa_amigo=mapa_am, silencioso=False)
+                info_auto_novo = carregar_log_auto_sync()
+                placeholder_horario.caption(
+                    f"⏰ **Leitura Automática Programada (12h e 21h):** Última execução em `{info_auto_novo['horario_execucao']}` — {info_auto_novo['resumo']}"
+                )
+
 # ==============================================================================
-# ABA 2: LANÇAMENTO ÚNICO UNIFICADO (TELEMÓVEL)
+# ABA 2: LANÇAMENTO ÚNICO (TELEMÓVEL)
 # ==============================================================================
 with aba_gerador:
     st.subheader("📱 Lançamento Único de Atendimento")
@@ -567,7 +585,7 @@ with aba_gerador:
         obs_gen = st.text_area("Observações Técnicas (Opcional)", placeholder="EX: Refeita configuração nos equipamentos...", key="uni_obs")
 
         clicou_lancar_unico = st.form_submit_button(
-            "🚀 Lançar no Sistema e Gerar Mensagem WhatsApp",
+            "🚀 Lançar no Sistema",
             type="primary",
             use_container_width=True
         )
@@ -609,6 +627,14 @@ with aba_gerador:
             if agregado3_oficial != "Não":
                 lista_servicos_os.append({"nome": agregado3_oficial, "lpu": max(1, int(lpu_agregado3 or 1)), "cabo": 1, "eh_principal": False})
 
+            obs_limpa_os = obs_gen.strip()
+            if obs_limpa_os and "sistema autônomo FibraWer" not in obs_limpa_os:
+                obs_padrao_final = f"{obs_limpa_os} | Protocolo encerrado automaticamente pelo sistema autônomo FibraWer"
+            elif not obs_limpa_os:
+                obs_padrao_final = "Atendimento concluído | Protocolo encerrado automaticamente pelo sistema autônomo FibraWer"
+            else:
+                obs_padrao_final = obs_limpa_os
+
             dados_os_atual = {
                 "data": datetime.now().strftime("%d/%m/%Y"),
                 "tecnico_exec": tecnico_selecionado,
@@ -619,50 +645,19 @@ with aba_gerador:
                 "cidade": cidade_gen,
                 "servicos": lista_servicos_os,
                 "equipamentos": equipamentos_form,
-                "obs": obs_gen.strip()
+                "obs": obs_padrao_final
             }
 
             salvar_na_fila_assertec(dados_os_atual)
 
-            # 1º PASSO: Grava IMEDIATAMENTE na planilha do técnico e mostra a linha exata
+            # 1º PASSO: Grava IMEDIATAMENTE na planilha do técnico
             with st.spinner("📊 Gravando serviço na planilha do técnico..."):
                 registrar_servico_na_planilha_tecnico(dados_os_atual)
 
-            # 2º PASSO: Gera e exibe na hora a mensagem do WhatsApp
-            if tecnico_selecionado == "ANDERSON":
-                nome_tec_assertec = "Anderson"
-            elif tecnico_selecionado == "BRUNO":
-                nome_tec_assertec = "Bruno"
-            else:
-                nome_tec_assertec = "Márcio"
-
-            blocos_mensagens = []
-            for srv_item in lista_servicos_os:
-                nome_srv_assertec = mapear_para_assertec(srv_item["nome"], mercado_selecionado)
-                metragem_msg = srv_item["cabo"] if srv_item.get("eh_principal") else srv_item["lpu"]
-                bloco = f"""ASSERTEC
-{tecnico_selecionado}
-Técnico: {nome_tec_assertec}
-Cliente: {cliente_gen.strip().upper()}
-Protocolo: {limpar_protocolo_str(protocolo_gen)}
-Cidade: {cidade_gen}
-Serviço: {nome_srv_assertec}
-Metragem: {metragem_msg}
-Obs: {obs_gen.strip()}"""
-                blocos_mensagens.append(bloco)
-
-            st.session_state["mensagem_gerada_final"] = "\n\n\n".join(blocos_mensagens)
-
-            st.markdown("### 📋 Mensagem Gerada:")
-            st.code(st.session_state["mensagem_gerada_final"], language="text")
-            mensagem_url = urllib.parse.quote(st.session_state["mensagem_gerada_final"])
-            link_wpp_ag = f"https://wa.me/?text={mensagem_url}"
-            st.link_button("📲 Enviar diretamente para o WhatsApp", link_wpp_ag, use_container_width=True)
-
-            # 3º PASSO: Avisa que o protocolo já foi enviado e pode fechar ou aguardar
+            # 2º PASSO: Avisa que o protocolo já foi enviado
             st.info("✅ Protocolo enviado! Já pode fechar a página, mas se preferir pode aguardar o relatório do lançamento abaixo.")
 
-            # 4º PASSO: Executa o lançamento em 2º plano blindado (Formulário Assertec + Portal Amigo)
+            # 3º PASSO: Executa o lançamento em 2º plano blindado (Formulário Assertec + Portal Amigo)
             with st.spinner("🤖 Enviando para o Formulário Assertec e Portal Brasil TecPar (AMIGO)..."):
                 ok_tecpar, msg_tecpar, ok_assertec, msg_assertec = executar_lancamento_amigo_seguro(dados_os_atual)
 
@@ -946,13 +941,6 @@ with aba_agendamentos:
             })
             st.session_state["aviso_topo_ag"] = ("sucesso", f"✅ Agendamento de **{cli_val}** para o dia **{data_fmt}** salvo na planilha!")
 
-        st.session_state["msg_agendamento_gerada"] = f"""📅 *AGENDAMENTO ({data_fmt})*
-👤 *Agendado por:* {nome_val}
-🏠 *Cliente:* {cli_val}
-🔢 *Protocolo:* {proto_val}
-🏙️ *Cidade:* {cid_val}
-📝 *Obs:* {obs_limpa or 'Nenhuma'}"""
-
         st.session_state["ag_cliente"] = ""
         st.session_state["ag_protocolo"] = ""
         st.session_state["ag_obs"] = ""
@@ -1131,7 +1119,7 @@ with aba_agendamentos:
         st.markdown("Altere os campos desejados abaixo e clique em **🔄 Relançar Agendamento**.")
     else:
         st.subheader("📝 Novo Agendamento")
-        st.markdown("Preencha os campos obrigatórios para gravar na planilha e gerar a mensagem para o grupo do WhatsApp.")
+        st.markdown("Preencha os campos obrigatórios para gravar na planilha.")
 
     if st.session_state.get("erro_form_ag"):
         st.error(st.session_state["erro_form_ag"])
@@ -1165,16 +1153,8 @@ with aba_agendamentos:
                 )
         else:
             st.form_submit_button(
-                "💾 Salvar na Planilha e Gerar Mensagem",
+                "💾 Salvar na Planilha",
                 on_click=cb_salvar_ou_relancar,
                 type="primary",
                 use_container_width=True
             )
-
-    if st.session_state.get("msg_agendamento_gerada"):
-        st.markdown("### 📋 Mensagem Gerada:")
-        st.code(st.session_state["msg_agendamento_gerada"], language="text")
-
-        msg_ag_url = urllib.parse.quote(st.session_state["msg_agendamento_gerada"])
-        link_wpp_ag = f"https://wa.me/?text={msg_ag_url}"
-        st.link_button("📲 Enviar para o Grupo do WhatsApp", link_wpp_ag, use_container_width=True)

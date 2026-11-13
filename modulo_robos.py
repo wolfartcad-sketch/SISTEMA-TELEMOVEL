@@ -28,12 +28,14 @@ from modulo_assertec import (
     EQUIPAMENTOS_LISTA,
     servico_vai_para_amigo,
     servico_exige_equipamentos,
-    limpar_protocolo_str, mapear_para_assertec,
+    limpar_protocolo_str,
+    mapear_para_assertec,
 )
 
 # Controle global de instalação do navegador (seguro para rodar em 2º plano sem travar threads)
 _CHROMIUM_VERIFICADO = False
 _LOCK_ROBO_AMIGO = threading.Lock()
+
 
 def garantir_instalacao_chromium():
     global _CHROMIUM_VERIFICADO
@@ -51,6 +53,7 @@ def garantir_instalacao_chromium():
     except Exception:
         return False
 
+
 def iniciar_browser_playwright(p):
     opcoes_args = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
     for caminho_sis in ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"]:
@@ -65,6 +68,7 @@ def iniciar_browser_playwright(p):
         subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=False)
         return p.chromium.launch(headless=True, args=opcoes_args)
 
+
 # ==============================================================================
 # ROBÔ 1: SALESFORCE (FIELD SERVICE)
 # ==============================================================================
@@ -77,12 +81,14 @@ def carregar_agenda_sf_cache():
             pass
     return []
 
+
 def salvar_agenda_sf_cache(lista):
     try:
         with open(ARQUIVO_CACHE_SF, "w", encoding="utf-8") as f:
             json.dump(lista, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
+
 
 def sincronizar_agenda_salesforce(codigo_mfa=""):
     try:
@@ -208,6 +214,7 @@ def sincronizar_agenda_salesforce(codigo_mfa=""):
     except Exception as e:
         return False, f"Erro ao sincronizar Salesforce: {e}", []
 
+
 # ==============================================================================
 # ROBÔ 2: PORTAL BRASIL TECPAR (AMIGO / AVATO) - RÁPIDO E SEM FALSO ERRO
 # ==============================================================================
@@ -230,6 +237,7 @@ def obter_frame_interno_gas(page, timeout_ms=25000):
                 pass
         page.wait_for_timeout(150)
     return page.frames[-1]
+
 
 def selecionar_opcao_select_flexivel(select_locator, texto_alvo):
     def norm(s):
@@ -255,6 +263,7 @@ def selecionar_opcao_select_flexivel(select_locator, texto_alvo):
             select_locator.dispatch_event("change")
             return True
     return False
+
 
 def marcar_input_por_rotulo_isolado(target_frame, rotulo_exato, attr_marca):
     js_mark = """
@@ -288,6 +297,7 @@ def marcar_input_por_rotulo_isolado(target_frame, rotulo_exato, attr_marca):
         return target_frame.evaluate(js_mark, [rotulo_exato, attr_marca])
     except Exception:
         return False
+
 
 def preencher_justificativas_visiveis(target_frame, texto_justificativa=JUSTIFICATIVA_PADRAO_TECPAR):
     js_just = """
@@ -369,6 +379,7 @@ def preencher_justificativas_visiveis(target_frame, texto_justificativa=JUSTIFIC
                 campo.press("Tab")
     except Exception:
         pass
+
 
 def executar_lancamento_portal_tecpar(dados_os):
     servicos_amigo = [s for s in dados_os.get("servicos", []) if servico_vai_para_amigo(s["nome"])]
@@ -566,7 +577,7 @@ def executar_lancamento_portal_tecpar(dados_os):
                 except Exception:
                     pass
 
-                # 5. MODAL DE EQUIPAMENTOS (SEM ESPERA REPETIDA DE 5 SEGUNDOS)
+                # 5. MODAL DE EQUIPAMENTOS
                 tem_ativacao = any(servico_exige_equipamentos(s["nome"]) for s in servicos_amigo)
                 if tem_ativacao:
                     equipamentos_usados = dados_os.get("equipamentos", {})
@@ -620,14 +631,13 @@ def executar_lancamento_portal_tecpar(dados_os):
                         else:
                             btn_confirmar_eq.click()
 
-                        # Assim que o modal fechar, sai imediatamente sem perder 5 segundos
                         try:
                             btn_confirmar_eq.wait_for(state="hidden", timeout=3500)
                             break
                         except Exception:
                             pass
 
-                # 6. CONFIRMAÇÃO INTELIGENTE (EVITA FALSO ERRO QUANDO O PORTAL DEMORA A ATUALIZAR A TABELA)
+                # 6. CONFIRMAÇÃO INTELIGENTE
                 gravou_com_sucesso = False
                 inicio_verif = time.time()
                 while (time.time() - inicio_verif) < 20:
@@ -640,12 +650,10 @@ def executar_lancamento_portal_tecpar(dados_os):
                             texto_pagina = (target_frame.locator("body").inner_text(timeout=1500) or "").upper()
                             parte_atividades = texto_pagina.split("MINHAS ATIVIDADES")[-1] if "MINHAS ATIVIDADES" in texto_pagina else ""
 
-                            # Critério 1: Apareceu na lista Minhas Atividades
                             na_lista = (proto_str in parte_atividades) and (
                                 "AGUARDANDO APROVAÇÃO" in parte_atividades or "LAN-" in parte_atividades or dados_os["cliente"].upper()[:10] in parte_atividades
                             )
 
-                            # Critério 2: O portal limpou o campo de protocolo após gravar com sucesso e não há mensagem de erro
                             val_campo_proto = ""
                             try:
                                 val_campo_proto = (loc_proto.input_value(timeout=500) or "").strip()
@@ -672,40 +680,27 @@ def executar_lancamento_portal_tecpar(dados_os):
         except Exception as e:
             return False, f"Erro no protocolo {dados_os.get('protocolo')}: {e}"
 
-def executar_lancamento_amigo_seguro(dados_os):
-    """
-    Dispara o robô em uma Thread independente (daemon=False).
-    Se o técnico fechar a aba do telemóvel durante o processo, a Thread continua
-    executando em segundo plano até concluir 100% do lançamento no portal.
-    Se o técnico permanecer na página, retorna o resultado normalmente para a tela.
-    """
-    resultado = {"ok": False, "msg": "Em processamento..."}
-
-    def _worker():
-        ok, msg = executar_lancamento_portal_tecpar(dados_os)
-        resultado["ok"] = ok
-        resultado["msg"] = msg
-
-    t = threading.Thread(target=_worker, daemon=False)
-    t.start()
-
-    while t.is_alive():
-        time.sleep(0.3)
-
-    return resultado["ok"], resultado["msg"]
 
 ULTIMOS_STATUS_AMIGO = {}
+
 
 def extrair_status_minhas_atividades(target_frame):
     """
     Varre a tabela 'Minhas Atividades' do Portal Brasil TecPar (Amigo)
-    e retorna um dicionário {protocolo: status} reconhecendo 'PAGAMENTO AUTORIZADO'.
+    rolando a tela para carregar todos os itens do ciclo e retorna {protocolo: status}.
     """
+    try:
+        for _ in range(6):
+            target_frame.evaluate("window.scrollBy(0, 1200)")
+            time.sleep(0.25)
+    except Exception:
+        pass
+
     js_status = """
     () => {
         const resultado = {};
         const norm = (s) => (s || '').toUpperCase().trim();
-        const linhas = Array.from(document.querySelectorAll('tr, .card, .list-group-item'));
+        const linhas = Array.from(document.querySelectorAll('tr, .card, .list-group-item, div'));
 
         for (const el of linhas) {
             const txt = norm(el.innerText || '');
@@ -714,7 +709,7 @@ def extrair_status_minhas_atividades(target_frame):
             let statusAchado = '';
             if (txt.includes('AGUARDANDO APROVA') || txt.includes('EM ANALISE') || txt.includes('EM ANÁLISE')) {
                 statusAchado = 'AGUARDANDO APROVAÇÃO';
-            } else if (txt.includes('REPROVAD') || txt.includes('RECUSAD') || txt.includes('REJEITAD') || txt.includes('CANCELAD')) {
+            } else if (txt.includes('REPROVAD') || txt.includes('RECUSAD') || txt.includes('REJEITAD') || txt.includes('CANCELAD') || txt.includes('CONTESTADO')) {
                 statusAchado = 'REPROVADO';
             } else if (txt.includes('PAGAMENTO AUTORIZADO') || txt.includes('AUTORIZADO') || txt.includes('APROVAD')) {
                 statusAchado = 'APROVADO';
@@ -722,7 +717,6 @@ def extrair_status_minhas_atividades(target_frame):
 
             if (!statusAchado) continue;
 
-            // 1º Captura explícita no padrão "Protocolo 180573"
             const matchExplicito = txt.match(/PROTOCOLO\\s*:?\\s*(\\d{4,14})/g);
             if (matchExplicito) {
                 for (const m of matchExplicito) {
@@ -731,7 +725,6 @@ def extrair_status_minhas_atividades(target_frame):
                 }
             }
 
-            // 2º Captura números de protocolo de 5 a 12 dígitos na linha
             const todosNumeros = txt.match(/\\b\\d{5,12}\\b/g);
             if (todosNumeros) {
                 for (const n of todosNumeros) {
@@ -751,14 +744,6 @@ def extrair_status_minhas_atividades(target_frame):
         pass
     return {}
 
-    try:
-        mapa = target_frame.evaluate(js_status)
-        if isinstance(mapa, dict):
-            ULTIMOS_STATUS_AMIGO.update(mapa)
-            return mapa
-    except Exception:
-        pass
-    return {}
 
 def buscar_status_portal_amigo_sob_demanda():
     """Abre o Portal Amigo em 2º plano apenas para ler os status atuais de Minhas Atividades."""
@@ -809,15 +794,11 @@ def buscar_status_portal_amigo_sob_demanda():
         except Exception as e:
             return False, f"Erro ao consultar Portal Amigo: {e}", {}
 
-        # ==============================================================================
-# ==============================================================================
+
 # ==============================================================================
 # ROBÔ 3: FORMULÁRIO GOOGLE ASSERTEC (ENVIO DIRETO + PLAYWRIGHT COM SCROLL POPUP)
 # ==============================================================================
 def normalizar_numero_metragem_assertec(nome_servico_assertec, cabo_bruto, lpu_bruto, eh_principal=True):
-    """
-    Garante que o campo 'Quantidade / Metragem / Km' receba APENAS números inteiros puros (mínimo 1).
-    """
     srv_up = str(nome_servico_assertec or "").upper()
     eh_multi = any(
         termo in srv_up
@@ -841,31 +822,26 @@ def _sem_acento_upper(texto):
 
 
 def _escolher_opcao_exata_forms(valor_desejado, opcoes_disponiveis):
-    """Compara o valor com a lista oficial de opções do Google Forms e devolve o texto idêntico."""
     if not opcoes_disponiveis:
         return str(valor_desejado or "").strip()
 
     alvo = _sem_acento_upper(valor_desejado)
 
-    # 1. Correspondência exata (ignorando acentos e maiúsculas/minúsculas)
     for op in opcoes_disponiveis:
         if _sem_acento_upper(op) == alvo:
             return op
 
-    # 2. Regra específica para Desativação / Retirada (singular ou plural)
     if "DESATIVA" in alvo or "RETIRADA" in alvo:
         for op in opcoes_disponiveis:
             op_n = _sem_acento_upper(op)
             if "DESATIVA" in op_n or "RETIRADA" in op_n:
                 return op
 
-    # 3. Correspondência por inclusão parcial
     for op in opcoes_disponiveis:
         op_norm = _sem_acento_upper(op)
         if len(alvo) >= 4 and (alvo in op_norm or op_norm in alvo):
             return op
 
-    # 4. Correspondência por palavras em comum
     palavras_alvo = [w for w in re.split(r"\W+", alvo) if len(w) >= 3]
     melhor_op = None
     maior_score = 0
@@ -889,7 +865,6 @@ def preencher_item_google_forms(page, container, valor_alvo):
 
     alvo_norm = _sem_acento_upper(val_str)
 
-    # 1. Campo de Data (input[type='date'] ou campos separados de Dia/Mês/Ano)
     inp_date = container.locator("input[type='date']")
     if inp_date.count() > 0:
         try:
@@ -916,7 +891,6 @@ def preencher_item_google_forms(page, container, valor_alvo):
         except Exception:
             pass
 
-    # 2. Radio buttons (Técnico, Empresa, etc.)
     radios = container.locator("[role='radio']")
     if radios.count() > 0:
         textos_radios = []
@@ -936,7 +910,6 @@ def preencher_item_google_forms(page, container, valor_alvo):
                 page.wait_for_timeout(150)
                 return True
 
-    # 3. Dropdown Listbox (foca exclusivamente no menu popup aberto V68bde / exportSelectPopup)
     listbox = container.locator("[role='listbox']")
     if listbox.count() > 0:
         try:
@@ -976,7 +949,6 @@ def preencher_item_google_forms(page, container, valor_alvo):
             except Exception:
                 pass
 
-    # 4. Campo de Texto / Número / Observação
     inp_txt = container.locator("input[type='text'], input[type='number'], input:not([type]), textarea")
     if inp_txt.count() > 0:
         try:
@@ -994,18 +966,26 @@ def preencher_item_google_forms(page, container, valor_alvo):
     return False
 
 
+SUFIXO_OBS_FIBRAWER = "Protocolo encerrado automaticamente pelo sistema autônomo FibraWer"
+
+
+def formatar_observacao_padrao_fibrawer(obs_bruta):
+    txt = str(obs_bruta or "").strip()
+    if not txt:
+        txt = "Atendimento concluído com sucesso"
+    if "SISTEMA AUTÔNOMO FIBRAWER" not in txt.upper() and "SISTEMA AUTONOMO FIBRAWER" not in txt.upper():
+        txt = f"{txt} | {SUFIXO_OBS_FIBRAWER}"
+    return txt
+
+
 def enviar_formulario_assertec_playwright(dados_os):
-    """
-    Envia os serviços da OS diretamente para o Google Forms da Assertec em uma única requisição,
-    validando que as perguntas do formulário ('role="listitem"') deram lugar à tela de confirmação.
-    """
     import requests as req_http
 
     protocolo_limpo = re.sub(r"\.0+$", "", str(dados_os.get("protocolo", "")).strip())
     protocolo_limpo = re.sub(r"\D", "", protocolo_limpo)
     cliente_nome = str(dados_os.get("cliente", "")).strip().upper()
     cidade_nome = str(dados_os.get("cidade", "")).strip()
-    obs_texto = str(dados_os.get("obs", "")).strip() or "Atendimento concluído com sucesso"
+    obs_texto = formatar_observacao_padrao_fibrawer(dados_os.get("obs", ""))
     mercado = dados_os.get("mercado", "AMIGO - VAREJO")
 
     tecnico_raw = str(dados_os.get("tecnico_exec", "ANDERSON")).upper()
@@ -1124,7 +1104,6 @@ def enviar_formulario_assertec_playwright(dados_os):
 
             r1 = sess.post(url_post, data=payload, timeout=15)
 
-            # Na página de resposta gravada com sucesso, os blocos de perguntas (role="listitem") desaparecem
             if r1.status_code == 200 and 'role="listitem"' not in r1.text and 'role="alert"' not in r1.text:
                 enviados_http += 1
             else:
@@ -1140,11 +1119,6 @@ def enviar_formulario_assertec_playwright(dados_os):
 
 
 def executar_lancamento_amigo_seguro(dados_os):
-    """
-    Dispara em segundo plano (Thread independente):
-    1. O envio do Formulário Google da Assertec (gravando na planilha Fibrawer).
-    2. O lançamento no Portal Brasil TecPar (Amigo), se aplicável.
-    """
     resultado = {
         "ok": False,
         "msg": "Em processamento...",
@@ -1168,3 +1142,46 @@ def executar_lancamento_amigo_seguro(dados_os):
         time.sleep(0.2)
 
     return resultado["ok"], resultado["msg"], resultado["ok_assertec"], resultado["msg_assertec"]
+
+
+def executar_encerramento_salesforce_seguro(dados_os):
+    from modulo_sf_base import enviar_notificacao_whatsapp_tecnico
+
+    dados_os["obs"] = formatar_observacao_padrao_fibrawer(dados_os.get("obs", ""))
+    resultado = {"ok": False, "msg": "Iniciando encerramento no Salesforce..."}
+
+    def _worker_sf():
+        srv_principal = str(dados_os.get("servico", "")).upper()
+        tipo_fluxo = str(dados_os.get("tipo_encerramento_sf", "")).upper()
+        tecnico = dados_os.get("tecnico_exec", "ANDERSON")
+        proto = dados_os.get("protocolo", "")
+        cli = dados_os.get("cliente", "")
+
+        if "DESATIVA" in tipo_fluxo or "RETIRADA" in tipo_fluxo or "DESATIVA" in srv_principal or "RETIRADA" in srv_principal:
+            from modulo_sf_desativacao import encerrar_desativacao_salesforce
+            ok_sf, msg_sf = encerrar_desativacao_salesforce(dados_os)
+        elif "MANUTEN" in tipo_fluxo or "REPARO" in tipo_fluxo or "ROMPIMENTO" in srv_principal or "MANUTEN" in srv_principal or "REPARO" in srv_principal:
+            from modulo_sf_manutencao import encerrar_manutencao_salesforce
+            ok_sf, msg_sf = encerrar_manutencao_salesforce(dados_os)
+        else:
+            from modulo_sf_ativacao import encerrar_ativacao_salesforce
+            ok_sf, msg_sf = encerrar_ativacao_salesforce(dados_os)
+
+        resultado["ok"] = ok_sf
+        resultado["msg"] = msg_sf
+
+        status_emoji = "🟢 SUCESSO" if ok_sf else "🔴 ATENÇÃO (ERRO)"
+        texto_whats = (
+            f"{status_emoji} - FibraWer Salesforce\n"
+            f"Protocolo: {proto}\n"
+            f"Cliente: {cli}\n"
+            f"Resultado: {msg_sf}"
+        )
+        enviar_notificacao_whatsapp_tecnico(tecnico, texto_whats)
+
+    t = threading.Thread(target=_worker_sf, daemon=False)
+    t.start()
+    while t.is_alive():
+        time.sleep(0.3)
+
+    return resultado["ok"], resultado["msg"]
