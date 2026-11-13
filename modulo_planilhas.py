@@ -54,6 +54,19 @@ def normalizar_nome_sem_sufixo_p(nome):
     return re.sub(r"\s+P\d+$", "", n).strip()
 
 
+def _post_google_script_com_retry(payload, timeout_seg=120):
+    """Envia requisição ao Google Apps Script com timeout amplo (120s) e 2ª tentativa automática."""
+    ultimo_erro = None
+    for tentativa in range(2):
+        try:
+            resp = requests.post(GOOGLE_SCRIPT_PLANILHAS_URL, json=payload, timeout=timeout_seg)
+            return resp.json()
+        except Exception as e:
+            ultimo_erro = e
+            time.sleep(2)
+    raise ultimo_erro
+
+
 def obter_nome_aba_ciclo_atual(dt=None):
     if not dt:
         dt = obter_agora_brasil()
@@ -248,8 +261,7 @@ def registrar_servico_na_planilha_tecnico(dados_os):
     }
 
     try:
-        resp = requests.post(GOOGLE_SCRIPT_PLANILHAS_URL, json=payload, timeout=20)
-        dados_resp = resp.json()
+        dados_resp = _post_google_script_com_retry(payload, timeout_seg=90)
 
         if dados_resp.get("ok"):
             aba_usada = dados_resp.get("aba", nome_aba)
@@ -275,13 +287,20 @@ def registrar_servico_na_planilha_tecnico(dados_os):
         return False
 
 
+def _buscar_valor_coluna_flexivel(row_dict_norm, palavras_chave, excluir_palavras=()):
+    """Localiza o valor de uma coluna mesmo que o cabeçalho tenha acentos, espaços extras ou maiúsculas diferentes."""
+    for nome_col_norm, valor in row_dict_norm.items():
+        if any(ex in nome_col_norm for ex in excluir_palavras):
+            continue
+        if any(pk in nome_col_norm for pk in palavras_chave):
+            return str(valor or "").strip()
+    return ""
+
+
 def ler_dados_auditoria_assertec():
     """
-    Lê a aba 'Retorno Formulario' da planilha Assertec com dtype=str:
-    - Valida protocolos e clientes.
-    - Detecta Plantão Duplo / Plantão Simples na planilha Assertec (por protocolo, cliente ou serviço).
-    - Mapeia as assinaturas de cada lançamento na Assertec para saber se 2 lançamentos do mesmo protocolo
-      têm algo diferente entre si (ex: metragem, data, cidade, obs) ou se são duplicados idênticos.
+    Lê a planilha da Assertec extraindo o ID com segurança (mesmo que a URL tenha /export?format=csv)
+    e identifica as colunas de forma flexível (sem depender de maiúsculas/minúsculas exatas).
     """
     mapa_assertec = {}
     mapa_clientes_assertec = {}
@@ -292,116 +311,124 @@ def ler_dados_auditoria_assertec():
     hoje_br = obter_agora_brasil().strftime("%d/%m/%Y")
     hoje_iso = obter_agora_brasil().strftime("%Y-%m-%d")
 
-    if not ASSERTEC_PLANILHA_URL or "/d/" not in ASSERTEC_PLANILHA_URL:
-        return mapa_assertec, mapa_clientes_assertec, erros_metragem, assinaturas_distintas_assertec
+    match_id = re.search(r"/d/([a-zA-Z0-9-_]+)", str(ASSERTEC_PLANILHA_URL or ""))
+    sheet_id = match_id.group(1) if match_id else "1MMQ8PAjr2GQfWxPnfYNfHSiiu9AUdE0pvfJikSGQgqU"
+    base_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}"
 
-    try:
-        base_url = ASSERTEC_PLANILHA_URL.split("/edit")[0].strip("/")
-        aba_encoded = urllib.parse.quote("Retorno Formulario")
-        csv_url = f"{base_url}/gviz/tq?tqx=out:csv&sheet={aba_encoded}"
+    urls_tentativa = [
+        f"{base_url}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote('Retorno Formulario')}",
+        f"{base_url}/export?format=csv",
+    ]
 
-        df = pd.read_csv(csv_url, dtype=str).fillna("")
-
-        for idx, row in df.iterrows():
-            proto = limpar_protocolo_planilha(row.get("Protocolo", ""))
-            cli = str(row.get("Nome do cliente", "")).strip()
-            cli_norm = normalizar_nome_cliente(cli)
-            cli_sem_p = normalizar_nome_sem_sufixo_p(cli)
-            cid = str(row.get("Cidade", "")).strip()
-            srv = str(row.get("Tipo de serviço", "")).strip()
-            srv_norm = normalizar_nome_cliente(srv)
-            qtd_raw = str(row.get("Quantidade / Metragem / Km", "")).strip()
-            obs_raw = str(row.get("Observações", row.get("Observacao", ""))).strip()
-            data_srv = str(row.get("Data do serviço", row.get("Data", ""))).strip()
-            carimbo = str(row.get("Carimbo de data/hora", row.iloc[0] if len(row) > 0 else "")).strip()
-            tec_form = str(row.get("Técnico", row.get("Qual seu nome?", ""))).strip().upper()
-
-            texto_linha_inteira = " ".join([str(v).upper() for v in row.values])
-            eh_plantao = (
-                "PLANTAO" in texto_linha_inteira
-                or "PLANTÃO" in texto_linha_inteira
-                or "DIARIA" in srv_norm
-                or proto == "123456"
-            )
-            if eh_plantao:
-                tem_plantao_na_assertec = True
-
-            if not proto and not cli_norm and not eh_plantao:
+    for csv_url in urls_tentativa:
+        try:
+            df = pd.read_csv(csv_url, dtype=str).fillna("")
+            if df.empty:
                 continue
 
-            problemas = []
-            if not cli and not eh_plantao:
-                problemas.append("Cliente vazio")
-            if not cid and not eh_plantao:
-                problemas.append("Cidade vazia")
-            if not srv and not eh_plantao:
-                problemas.append("Serviço vazio")
+            for idx, row in df.iterrows():
+                row_norm = {normalizar_nome_cliente(k): str(v or "").strip() for k, v in row.items()}
 
-            if not eh_plantao:
-                if not qtd_raw:
-                    problemas.append("Metragem/Qtd vazia")
-                elif not re.match(r"^\d+([.,]\d+)?$", qtd_raw):
-                    problemas.append(f"Texto inválido na Metragem ('{qtd_raw}')")
-                    erros_metragem.append({
-                        "linha_assertec": idx + 2,
-                        "cliente": cli,
-                        "protocolo": proto,
-                        "servico": srv,
-                        "valor_invalido": qtd_raw
-                    })
+                proto = limpar_protocolo_planilha(
+                    _buscar_valor_coluna_flexivel(row_norm, ["PROTOCOLO", "OS", "ORDEM"])
+                )
+                cli = _buscar_valor_coluna_flexivel(row_norm, ["CLIENTE", "ASSINANTE"])
+                cli_norm = normalizar_nome_cliente(cli)
+                cli_sem_p = normalizar_nome_sem_sufixo_p(cli)
+                cid = _buscar_valor_coluna_flexivel(row_norm, ["CIDADE", "MUNICIPIO"])
+                srv = _buscar_valor_coluna_flexivel(row_norm, ["SERVICO", "TIPO DE SERVICO", "ATIVIDADE"])
+                srv_norm = normalizar_nome_cliente(srv)
+                qtd_raw = _buscar_valor_coluna_flexivel(row_norm, ["QUANTIDADE", "METRAGEM", "KM", "CABO", "QTD"])
+                obs_raw = _buscar_valor_coluna_flexivel(row_norm, ["OBSERVA", "OBS"])
+                data_srv = _buscar_valor_coluna_flexivel(row_norm, ["DATA"], excluir_palavras=["CARIMBO"])
+                carimbo = _buscar_valor_coluna_flexivel(row_norm, ["CARIMBO", "TIMESTAMP"]) or (str(row.iloc[0]).strip() if len(row) > 0 else "")
+                tec_form = _buscar_valor_coluna_flexivel(row_norm, ["TECNICO", "QUAL SEU NOME"], excluir_palavras=["CLIENTE"]).upper()
 
-            info_status = {
-                "status": "ERRO" if problemas else "OK",
-                "motivo": ", ".join(problemas) if problemas else "Cadastro 100% válido na planilha Assertec"
-            }
+                texto_linha_inteira = " ".join([str(v).upper() for v in row.values])
+                eh_plantao = (
+                    "PLANTAO" in texto_linha_inteira
+                    or "PLANTÃO" in texto_linha_inteira
+                    or "DIARIA" in srv_norm
+                    or proto == "123456"
+                )
+                if eh_plantao:
+                    tem_plantao_na_assertec = True
 
-            if proto:
-                if info_status["status"] == "OK" or mapa_assertec.get(proto, {}).get("status") != "OK":
-                    mapa_assertec[proto] = info_status
+                if not proto and not cli_norm and not eh_plantao:
+                    continue
 
-            if cli_norm:
-                if info_status["status"] == "OK" or mapa_clientes_assertec.get(cli_norm, {}).get("status") != "OK":
-                    mapa_clientes_assertec[cli_norm] = info_status
-            if cli_sem_p and cli_sem_p != cli_norm:
-                if info_status["status"] == "OK" or mapa_clientes_assertec.get(cli_sem_p, {}).get("status") != "OK":
-                    mapa_clientes_assertec[cli_sem_p] = info_status
+                problemas = []
+                if not cli and not eh_plantao:
+                    problemas.append("Cliente vazio")
+                if not cid and not eh_plantao:
+                    problemas.append("Cidade vazia")
+                if not srv and not eh_plantao:
+                    problemas.append("Serviço vazio")
 
-            # Registra detalhes (data, cidade, metragem, serviço, obs) para diferenciar lançamentos legítimos de duplicados idênticos
-            assinatura_detalhe = f"{data_srv}|{cid.upper()}|{srv_norm}|{qtd_raw}|{obs_raw.upper()}"
-            if proto:
-                assinaturas_distintas_assertec.setdefault(proto, set()).add(assinatura_detalhe)
-            if cli_norm:
-                assinaturas_distintas_assertec.setdefault(cli_norm, set()).add(assinatura_detalhe)
+                if not eh_plantao:
+                    if not qtd_raw:
+                        problemas.append("Metragem/Qtd vazia")
+                    elif not re.match(r"^\d+([.,]\d+)?$", qtd_raw):
+                        problemas.append(f"Texto inválido na Metragem ('{qtd_raw}')")
+                        erros_metragem.append({
+                            "linha_assertec": idx + 2,
+                            "cliente": cli,
+                            "protocolo": proto,
+                            "servico": srv,
+                            "valor_invalido": qtd_raw
+                        })
 
-            # Se foi enviado hoje no formulário Assertec, registra o horário para o relatório 12h/21h
-            if hoje_br in carimbo or hoje_iso in carimbo:
-                hora_envio = 10
-                m_hora = re.search(r"(\d{1,2}):(\d{2})", carimbo)
-                if m_hora:
-                    hora_envio = int(m_hora.group(1))
-                ctrl = _carregar_controle_wpp_dia()
-                tec_id = "ANDERSON"
-                if "BRUNO" in tec_form:
-                    tec_id = "BRUNO"
-                elif "MARCIO" in tec_form or "MÁRCIO" in tec_form:
-                    tec_id = "MARCIO"
-                chave_u = f"{tec_id}|{proto}|{cli_norm}|{srv_norm}"
-                if not any(x.get("chave") == chave_u for x in ctrl["lancados_hoje"]):
-                    ctrl["lancados_hoje"].append({
-                        "chave": chave_u,
-                        "tecnico": tec_id,
-                        "cliente": cli.upper(),
-                        "protocolo": proto,
-                        "servico": srv.upper(),
-                        "hora": f"{hora_envio:02d}:00:00",
-                        "antes_das_12h": hora_envio < 12
-                    })
-                    _salvar_controle_wpp_dia(ctrl)
+                info_status = {
+                    "status": "ERRO" if problemas else "OK",
+                    "motivo": ", ".join(problemas) if problemas else "Cadastro 100% válido na planilha Assertec"
+                }
 
-    except Exception as e:
-        st.warning(f"⚠️ Não foi possível ler a planilha da Assertec: {e}")
+                if proto:
+                    if info_status["status"] == "OK" or mapa_assertec.get(proto, {}).get("status") != "OK":
+                        mapa_assertec[proto] = info_status
 
-    # Se consta Plantão na planilha Assertec, valida todas as chaves de Plantão (123456, Duplo e Simples)
+                if cli_norm:
+                    if info_status["status"] == "OK" or mapa_clientes_assertec.get(cli_norm, {}).get("status") != "OK":
+                        mapa_clientes_assertec[cli_norm] = info_status
+                if cli_sem_p and cli_sem_p != cli_norm:
+                    if info_status["status"] == "OK" or mapa_clientes_assertec.get(cli_sem_p, {}).get("status") != "OK":
+                        mapa_clientes_assertec[cli_sem_p] = info_status
+
+                assinatura_detalhe = f"{data_srv}|{cid.upper()}|{srv_norm}|{qtd_raw}|{obs_raw.upper()}"
+                if proto:
+                    assinaturas_distintas_assertec.setdefault(proto, set()).add(assinatura_detalhe)
+                if cli_norm:
+                    assinaturas_distintas_assertec.setdefault(cli_norm, set()).add(assinatura_detalhe)
+
+                if hoje_br in carimbo or hoje_iso in carimbo:
+                    hora_envio = 10
+                    m_hora = re.search(r"(\d{1,2}):(\d{2})", carimbo)
+                    if m_hora:
+                        hora_envio = int(m_hora.group(1))
+                    ctrl = _carregar_controle_wpp_dia()
+                    tec_id = "ANDERSON"
+                    if "BRUNO" in tec_form:
+                        tec_id = "BRUNO"
+                    elif "MARCIO" in tec_form or "MÁRCIO" in tec_form:
+                        tec_id = "MARCIO"
+                    chave_u = f"{tec_id}|{proto}|{cli_norm}|{srv_norm}"
+                    if not any(x.get("chave") == chave_u for x in ctrl["lancados_hoje"]):
+                        ctrl["lancados_hoje"].append({
+                            "chave": chave_u,
+                            "tecnico": tec_id,
+                            "cliente": cli.upper(),
+                            "protocolo": proto,
+                            "servico": srv.upper(),
+                            "hora": f"{hora_envio:02d}:00:00",
+                            "antes_das_12h": hora_envio < 12
+                        })
+                        _salvar_controle_wpp_dia(ctrl)
+
+            if mapa_assertec or mapa_clientes_assertec:
+                break
+        except Exception:
+            continue
+
     if tem_plantao_na_assertec or "123456" in mapa_assertec:
         ok_plantao = {"status": "OK", "motivo": "Plantão validado na planilha Assertec"}
         mapa_assertec["123456"] = ok_plantao
@@ -412,17 +439,12 @@ def ler_dados_auditoria_assertec():
 
 
 def _enriquecer_mapa_amigo_para_planilha(mapa_amigo_bruto, mapa_assertec, mapa_clientes_assertec):
-    """
-    O Google Apps Script das planilhas espera o valor 'APROVADO' no mapa_amigo para gravar
-    'PAGAMENTO AUTORIZADO' na célula da planilha do técnico.
-    """
     mapa_limpo = {}
     for k, v in (mapa_amigo_bruto or {}).items():
         chave_str = str(k or "").strip()
         val_str = str(v or "").strip()
         if not chave_str or not val_str:
             continue
-        # Normaliza 'PAGAMENTO AUTORIZADO' -> 'APROVADO' para o Apps Script reconhecer e atualizar a planilha
         val_script = "APROVADO" if val_str.upper() in ("APROVADO", "PAGAMENTO AUTORIZADO") else val_str
         mapa_limpo[chave_str] = val_script
         eh_num = limpar_protocolo_planilha(chave_str)
@@ -438,12 +460,10 @@ def _enriquecer_mapa_amigo_para_planilha(mapa_amigo_bruto, mapa_assertec, mapa_c
                 mapa_limpo[n_sem_p] = val_script
                 mapa_limpo[f"{n_sem_p} P2"] = val_script
 
-    # Plantão Duplo e Plantão Simples (123456): estando na Assertec, envia 'APROVADO' para a planilha aprovar as linhas 25 e 30
     if "123456" in mapa_assertec or "PLANTAO" in mapa_clientes_assertec:
         for ch_p in ["123456", "PLANTAO", "PLANTÃO", "PLANTAO DUPLO", "PLANTÃO DUPLO", "PLANTAO SIMPLES", "PLANTÃO SIMPLES"]:
             mapa_limpo[ch_p] = "APROVADO"
 
-    # Suzane Colpo Rakowski P2 (Protocolo 21297168 confirmado na Amigo)
     mapa_limpo.setdefault("21297168", "APROVADO")
     mapa_limpo.setdefault("SUZANE COLPO RAKOWSKI P2", "APROVADO")
     mapa_limpo.setdefault("SUZANE COLPO RAKOWSKI", "APROVADO")
@@ -452,18 +472,10 @@ def _enriquecer_mapa_amigo_para_planilha(mapa_amigo_bruto, mapa_assertec, mapa_c
 
 
 def _auditar_planilhas_e_barrar_duplicados(dados, mapa_amigo, mapa_assertec, mapa_clientes_assertec, assinaturas_distintas_assertec):
-    """
-    1. Aprova automaticamente Plantão Duplo e Plantão Simples que estejam na planilha Assertec.
-    2. Verifica se existem 2 (ou mais) lançamentos iguais na planilha do técnico:
-       - Se tiver algo diferente entre um e outro (ex: serviço diferente, protocolo diferente, metragem/data/obs diferente), mantém aprovado.
-       - Se forem 2 lançamentos iguais (ex: GILDO AVILA DE SOUZA nas linhas 49 e 50 com mesmo técnico, cliente, protocolo e serviço),
-         BARRA O PAGAMENTO de ambos, tira de 'autorizados' e move para 'nao_aprovados_amigo' + lista de 'duplicados_barrados'.
-    """
     autorizados_brutos = list(dados.get("autorizados", []))
     nao_aprovados_brutos = list(dados.get("nao_aprovados_amigo", []))
     pendentes_ass = list(dados.get("pendentes_assertec", []))
 
-    # Passo 1: Move Plantão (e Suzane) de nao_aprovados para autorizados se constarem na Assertec/Amigo
     ainda_nao_aprovados = []
     for item in nao_aprovados_brutos:
         cli_item = str(item.get("cliente", item.get("CLIENTE", ""))).strip().upper()
@@ -493,8 +505,6 @@ def _auditar_planilhas_e_barrar_duplicados(dados, mapa_amigo, mapa_assertec, map
         else:
             ainda_nao_aprovados.append(item)
 
-    # Passo 2: Agrupa todos os lançamentos da planilha para detectar 2 lançamentos IGUAIS
-    # Chave de igualdade: (tecnico, cliente_normalizado, protocolo_limpo, servico_normalizado, extras_da_linha)
     grupos_iguais = {}
     for item in autorizados_brutos:
         tec = str(item.get("tecnico", item.get("TECNICO", ""))).strip().upper()
@@ -502,7 +512,6 @@ def _auditar_planilhas_e_barrar_duplicados(dados, mapa_amigo, mapa_assertec, map
         proto = limpar_protocolo_planilha(item.get("protocolo", item.get("PROTOCOLO", "")))
         srv = normalizar_nome_cliente(item.get("servico", item.get("SERVICO", "")))
 
-        # Se a linha trouxer campos extras (como cabo, metragem, cidade, data, obs, valor), inclui na comparação
         campos_extras = []
         for k_ex in ("cabo", "metragem", "cidade", "data", "obs", "valor"):
             val_ex = str(item.get(k_ex, item.get(k_ex.upper(), ""))).strip().upper()
@@ -522,16 +531,12 @@ def _auditar_planilhas_e_barrar_duplicados(dados, mapa_amigo, mapa_assertec, map
         if len(lista_itens) == 1:
             autorizados_finais.append(lista_itens[0])
         else:
-            # Existem 2 ou mais linhas com mesmo Técnico + Cliente + Protocolo + Serviço na planilha!
-            # Verifica se na planilha da Assertec existem múltiplos registros com algo diferente (ex: data, metragem ou obs diferente)
             conj_ass = assinaturas_distintas_assertec.get(proto) or assinaturas_distintas_assertec.get(cli) or set()
             eh_plantao = "PLANTAO" in srv or proto == "123456"
 
             if len(conj_ass) >= len(lista_itens) and eh_plantao:
-                # Plantões em domingos/datas diferentes na Assertec
                 autorizados_finais.extend(lista_itens)
             else:
-                # São 2 lançamentos IGUAIS (ex: GILDO AVILA DE SOUZA nas linhas 49 e 50) -> BARRA O PAGAMENTO!
                 linhas_str = ", ".join(str(x.get("linha", x.get("LINHA", "?"))) for x in lista_itens)
                 motivo_bloqueio = f"🚫 PAGAMENTO BARRADO: Lançado {len(lista_itens)}x igual na planilha (Linhas {linhas_str})"
                 if proto:
@@ -546,7 +551,6 @@ def _auditar_planilhas_e_barrar_duplicados(dados, mapa_amigo, mapa_assertec, map
                     ainda_nao_aprovados.append(copia_barrada)
                     duplicados_barrados.append(copia_barrada)
 
-    # Limpa eventuais plantões já aprovados de pendentes_assertec
     novos_pendentes_ass = []
     for item in pendentes_ass:
         cli_item = str(item.get("cliente", item.get("CLIENTE", ""))).strip().upper()
@@ -566,12 +570,6 @@ def _auditar_planilhas_e_barrar_duplicados(dados, mapa_amigo, mapa_assertec, map
 
 
 def _disparar_relatorio_whatsapp_turno(dados_sheets, mapa_assertec, mapa_clientes_assertec, turno_atual="MANUAL"):
-    """
-    Envia para o WhatsApp de cada técnico os serviços feitos no dia com 🟢 ou 🔴:
-    - Às 12h: envia todos os serviços lançados no dia até as 12h.
-    - Às 21h: envia SOMENTE os serviços lançados no dia após as 12h.
-    - Se o serviço tiver sido barrado por duplicidade idêntica, recebe 🔴 (DUPLICADO BARRADO).
-    """
     from modulo_sf_base import enviar_notificacao_whatsapp_tecnico
 
     ctrl = _carregar_controle_wpp_dia()
@@ -683,44 +681,45 @@ def sincronizar_status_e_auditar_planilhas(mapa_amigo=None, silencioso=False):
     }
 
     try:
-        resp = requests.post(GOOGLE_SCRIPT_PLANILHAS_URL, json=payload, timeout=30)
-        dados = resp.json()
+        dados = _post_google_script_com_retry(payload, timeout_seg=120)
         if not dados.get("ok"):
             if not silencioso:
                 st.warning(f"⚠️ Aviso ao verificar status: {dados.get('msg')}")
             return
 
-        # Audita Plantão e barra pagamentos duplicados idênticos (ex: Gildo linhas 49 e 50)
         dados = _auditar_planilhas_e_barrar_duplicados(
             dados, mapa_amigo_enriquecido, mapa_assertec, mapa_clientes_assertec, assinaturas_distintas_assertec
         )
 
-        # Se encontrou lançamentos duplicados idênticos, envia bloqueio para a planilha do técnico!
+        # Se encontrou duplicados idênticos, atualiza a planilha em 2º plano sem travar a tela
         chaves_barradas = dados.get("chaves_barradas", set())
         if chaves_barradas:
-            mapa_amigo_bloq = dict(mapa_amigo_enriquecido)
-            mapa_ass_bloq = dict(mapa_assertec)
-            mapa_cli_bloq = dict(mapa_clientes_assertec)
-            for ch_b in chaves_barradas:
-                mapa_amigo_bloq[ch_b] = "REPROVADO"
-                info_erro_dup = {"status": "ERRO", "motivo": "PAGAMENTO BARRADO: Lançamento duplicado idêntico na planilha"}
-                mapa_ass_bloq[ch_b] = info_erro_dup
-                mapa_cli_bloq[ch_b] = info_erro_dup
-            try:
-                requests.post(
-                    GOOGLE_SCRIPT_PLANILHAS_URL,
-                    json={
-                        "acao": "atualizar_status",
-                        "nome_aba": nome_aba,
-                        "url_assertec": ASSERTEC_PLANILHA_URL,
-                        "mapa_amigo": mapa_amigo_bloq,
-                        "mapa_assertec": mapa_ass_bloq,
-                        "mapa_clientes_assertec": mapa_cli_bloq
-                    },
-                    timeout=20
-                )
-            except Exception:
-                pass
+            def _bloq_bg():
+                mapa_amigo_bloq = dict(mapa_amigo_enriquecido)
+                mapa_ass_bloq = dict(mapa_assertec)
+                mapa_cli_bloq = dict(mapa_clientes_assertec)
+                for ch_b in chaves_barradas:
+                    mapa_amigo_bloq[ch_b] = "REPROVADO"
+                    info_erro_dup = {"status": "ERRO", "motivo": "PAGAMENTO BARRADO: Lançamento duplicado idêntico na planilha"}
+                    mapa_ass_bloq[ch_b] = info_erro_dup
+                    mapa_cli_bloq[ch_b] = info_erro_dup
+                try:
+                    requests.post(
+                        GOOGLE_SCRIPT_PLANILHAS_URL,
+                        json={
+                            "acao": "atualizar_status",
+                            "nome_aba": nome_aba,
+                            "url_assertec": ASSERTEC_PLANILHA_URL,
+                            "mapa_amigo": mapa_amigo_bloq,
+                            "mapa_assertec": mapa_ass_bloq,
+                            "mapa_clientes_assertec": mapa_cli_bloq
+                        },
+                        timeout=120
+                    )
+                except Exception:
+                    pass
+
+            threading.Thread(target=_bloq_bg, daemon=True).start()
 
         atualizados = dados.get("atualizados", [])
         autorizados = dados.get("autorizados", [])
@@ -823,8 +822,7 @@ def executar_checagem_background_silenciosa(chave_turno):
             "mapa_clientes_assertec": mapa_clientes_assertec
         }
 
-        resp = requests.post(GOOGLE_SCRIPT_PLANILHAS_URL, json=payload, timeout=30)
-        dados = resp.json()
+        dados = _post_google_script_com_retry(payload, timeout_seg=120)
         if dados.get("ok"):
             dados = _auditar_planilhas_e_barrar_duplicados(
                 dados, mapa_amigo_enriquecido, mapa_assertec, mapa_clientes_assertec, assinaturas_distintas
@@ -929,8 +927,7 @@ def exibir_painel_financeiro_exclusivo():
                         "nome_aba": nome_aba_consulta,
                         "url_assertec": ASSERTEC_PLANILHA_URL
                     }
-                    resp = requests.post(GOOGLE_SCRIPT_PLANILHAS_URL, json=payload, timeout=30)
-                    dados_fin = resp.json()
+                    dados_fin = _post_google_script_com_retry(payload, timeout_seg=120)
                     if dados_fin.get("ok"):
                         st.session_state["dados_fin_cache"] = dados_fin
                     else:
