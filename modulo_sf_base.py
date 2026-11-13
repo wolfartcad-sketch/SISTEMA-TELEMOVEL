@@ -1,4 +1,4 @@
-import os
+﻿import os
 import re
 import json
 import time
@@ -27,7 +27,7 @@ def obter_caminho_sessao_sf(nome_tecnico):
 
 
 def _ler_segredo_ao_vivo(chave_toml, padrao=""):
-    """Lê diretamente o arquivo .streamlit/secrets.toml para não depender de cache antigo."""
+    """LÃª diretamente o arquivo .streamlit/secrets.toml para nÃ£o depender de cache antigo."""
     caminho_toml = os.path.join(".streamlit", "secrets.toml")
     if os.path.exists(caminho_toml):
         try:
@@ -66,35 +66,67 @@ def obter_credenciais_sf_tecnico(nome_tecnico):
 
     if not usuario or not senha:
         raise ValueError(
-            f"Credenciais do Salesforce para o técnico {chave} não configuradas no secrets.toml "
+            f"Credenciais do Salesforce para o tÃ©cnico {chave} nÃ£o configuradas no secrets.toml "
             f"(SF_USER_{chave} e SF_PASS_{chave})."
         )
     return usuario, senha, nome_ass, cred
 
 
 def enviar_notificacao_whatsapp_tecnico(nome_tecnico, mensagem):
-    try:
-        _, _, _, cred = obter_credenciais_sf_tecnico(nome_tecnico)
-    except Exception:
-        tec_up = str(nome_tecnico or "ANDERSON").upper()
-        chave = "ANDERSON" if "ANDERSON" in tec_up else ("BRUNO" if "BRUNO" in tec_up else "MARCIO")
-        cred = SF_CREDENCIAIS_TECNICOS.get(chave, {})
+    tec_up = str(nome_tecnico or "ANDERSON").upper()
+    if "ANDERSON" in tec_up:
+        chave = "ANDERSON"
+    elif "BRUNO" in tec_up:
+        chave = "BRUNO"
+    else:
+        chave = "MARCIO"
 
-    fone = re.sub(r"\D", "", str(cred.get("whatsapp_fone", "")))
-    apikey = str(cred.get("whatsapp_apikey", "")).strip()
+    cred = dict(SF_CREDENCIAIS_TECNICOS.get(chave, {}))
+    fone_padrao = cred.get("whatsapp_fone", "555199260016" if chave == "ANDERSON" else "")
+    fone = re.sub(r"\D", "", str(_ler_segredo_ao_vivo(f"WHATSAPP_FONE_{chave}", fone_padrao)))
 
-    if not fone or not apikey:
-        return False, "WhatsApp não configurado no secrets.toml."
+    if not fone:
+        return False, f"Telefone de WhatsApp do tÃ©cnico {chave} nÃ£o configurado no secrets.toml."
 
-    try:
-        msg_encoded = urllib.parse.quote(mensagem)
-        url = f"https://api.callmebot.com/whatsapp.php?phone={fone}&text={msg_encoded}&apikey={apikey}"
-        resp = requests.get(url, timeout=15)
-        if resp.status_code == 200:
-            return True, "🟢 Mensagem enviada para o seu WhatsApp!"
-        return False, f"Aviso CallMeBot (Status {resp.status_code})"
-    except Exception as e:
-        return False, f"Falha ao enviar WhatsApp: {e}"
+    # Garante o formato brasileiro no WhatsApp (cÃ³digo 55 + DDD + nÃºmero)
+    if len(fone) in (10, 11) and not fone.startswith("55"):
+        fone = f"55{fone}"
+
+    # 1Âº Tenta enviar pela GREEN-API (nÃ£o exige ativaÃ§Ã£o no telemÃ³vel dos tÃ©cnicos)
+    id_instance = _ler_segredo_ao_vivo("GREEN_API_INSTANCE", "710722800809").strip()
+    api_token = _ler_segredo_ao_vivo("GREEN_API_TOKEN", "").strip()
+
+    if id_instance and api_token:
+        prefixo_host = id_instance[:4] if len(id_instance) >= 4 else "7107"
+        urls_green = [
+            f"https://{prefixo_host}.api.green-api.com/waInstance{id_instance}/sendMessage/{api_token}",
+            f"https://api.green-api.com/waInstance{id_instance}/sendMessage/{api_token}",
+        ]
+        payload = {
+            "chatId": f"{fone}@c.us",
+            "message": str(mensagem),
+        }
+        for url_g in urls_green:
+            try:
+                resp = requests.post(url_g, json=payload, timeout=15)
+                if resp.status_code == 200 and "idMessage" in (resp.text or ""):
+                    return True, f"ðŸŸ¢ Mensagem enviada via Green-API para {chave} ({fone})!"
+            except Exception:
+                continue
+
+    # 2Âº Reserva (Fallback): CallMeBot caso o token da Green-API ainda nÃ£o tenha sido preenchido
+    apikey = _ler_segredo_ao_vivo(f"WHATSAPP_APIKEY_{chave}", cred.get("whatsapp_apikey", "")).strip()
+    if fone and apikey:
+        try:
+            msg_encoded = urllib.parse.quote(mensagem)
+            url_cmb = f"https://api.callmebot.com/whatsapp.php?phone={fone}&text={msg_encoded}&apikey={apikey}"
+            resp = requests.get(url_cmb, timeout=15)
+            if resp.status_code == 200:
+                return True, f"ðŸŸ¢ Mensagem enviada via CallMeBot para {chave}!"
+        except Exception as e:
+            return False, f"Falha ao enviar WhatsApp: {e}"
+
+    return False, f"Configure o GREEN_API_TOKEN no secrets.toml para enviar mensagens para {chave}."
 
 
 def salvar_fotos_upload_temporario(protocolo, dict_arquivos_upload):
@@ -123,8 +155,8 @@ def salvar_fotos_upload_temporario(protocolo, dict_arquivos_upload):
 
 def _iniciar_browser_stealth_okta(playwright_ctx):
     """
-    Inicia o Chromium em 2º plano desativando flags de automação (AutomationControlled)
-    para que o EVO/Okta não bloqueie o login como robô.
+    Inicia o Chromium em 2Âº plano desativando flags de automaÃ§Ã£o (AutomationControlled)
+    para que o EVO/Okta nÃ£o bloqueie o login como robÃ´.
     """
     args_stealth = [
         "--no-sandbox",
@@ -138,7 +170,7 @@ def _iniciar_browser_stealth_okta(playwright_ctx):
 def _preencher_input_react_okta(page, campo_locator, texto):
     """
     Preenche um campo do Okta garantindo que o estado interno do React/JS receba
-    exatamente a string completa (incluindo '@' e maiúsculas/minúsculas).
+    exatamente a string completa (incluindo '@' e maiÃºsculas/minÃºsculas).
     """
     texto_str = str(texto)
     campo_locator.click()
@@ -148,7 +180,7 @@ def _preencher_input_react_okta(page, campo_locator, texto):
     campo_locator.press_sequentially(texto_str, delay=40)
     page.wait_for_timeout(150)
 
-    # Garante que o valor interno do DOM é 100% idêntico à senha/usuário
+    # Garante que o valor interno do DOM Ã© 100% idÃªntico Ã  senha/usuÃ¡rio
     try:
         val_atual = campo_locator.input_value()
     except Exception:
@@ -176,12 +208,12 @@ def _esta_logado_no_salesforce(page):
 
 def iniciar_sessao_sf_tecnico(playwright_ctx, nome_tecnico, codigo_totp="", lat=-29.7011, lon=-51.1352):
     """
-    Segue estritamente o caminho do vídeo:
-    1. Abre login.salesforce.com -> clica no link 'Usar domínio personalizado' -> digita 'prod-brasiltecpar' -> clica em 'Continuar'.
-    2. Na tela prod-brasiltecpar, clica no botão inferior 'Fazer login com Brasil TecPar'.
-    3. No EVO/Okta (com camuflagem anti-robô): preenche E-mail -> 'Mantenha-me conectado' -> 'Próximo'.
+    Segue estritamente o caminho do vÃ­deo:
+    1. Abre login.salesforce.com -> clica no link 'Usar domÃ­nio personalizado' -> digita 'prod-brasiltecpar' -> clica em 'Continuar'.
+    2. Na tela prod-brasiltecpar, clica no botÃ£o inferior 'Fazer login com Brasil TecPar'.
+    3. No EVO/Okta (com camuflagem anti-robÃ´): preenche E-mail -> 'Mantenha-me conectado' -> 'PrÃ³ximo'.
     4. Preenche a Senha -> 'Verificar'.
-    5. Preenche o código de 6 dígitos do Google Authenticator -> 'Verificar'.
+    5. Preenche o cÃ³digo de 6 dÃ­gitos do Google Authenticator -> 'Verificar'.
     """
     usuario, senha, nome_ass, _ = obter_credenciais_sf_tecnico(nome_tecnico)
     arq_sessao = obter_caminho_sessao_sf(nome_tecnico)
@@ -216,13 +248,13 @@ def iniciar_sessao_sf_tecnico(playwright_ctx, nome_tecnico, codigo_totp="", lat=
         kwargs_ctx["storage_state"] = arq_sessao
 
     context = browser.new_context(**kwargs_ctx)
-    # Oculta a propriedade navigator.webdriver para o Okta não detectar automação
+    # Oculta a propriedade navigator.webdriver para o Okta nÃ£o detectar automaÃ§Ã£o
     context.add_init_script(
         "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
     )
     page = context.new_page()
 
-    # Se já existe sessão salva, testa primeiro se já abre logado
+    # Se jÃ¡ existe sessÃ£o salva, testa primeiro se jÃ¡ abre logado
     if os.path.exists(arq_sessao) and not codigo_limpo:
         page.goto("https://prod-brasiltecpar.my.salesforce.com/?locale=br", timeout=60000, wait_until="domcontentloaded")
         page.wait_for_timeout(2500)
@@ -230,14 +262,14 @@ def iniciar_sessao_sf_tecnico(playwright_ctx, nome_tecnico, codigo_totp="", lat=
             return browser, context, page, nome_ass
 
     # =========================================================================
-    # PASSO 1 (Obrigatório conforme o vídeo):
-    # Abrir login.salesforce.com -> Clicar em 'Usar domínio personalizado' -> prod-brasiltecpar -> Continuar
+    # PASSO 1 (ObrigatÃ³rio conforme o vÃ­deo):
+    # Abrir login.salesforce.com -> Clicar em 'Usar domÃ­nio personalizado' -> prod-brasiltecpar -> Continuar
     # =========================================================================
     page.goto("https://login.salesforce.com/?locale=br", timeout=60000, wait_until="domcontentloaded")
     page.wait_for_timeout(1500)
 
     link_dom = page.locator(
-        "a#mydomainLink, a:has-text('Usar domínio personalizado'), a:has-text('Use Custom Domain')"
+        "a#mydomainLink, a:has-text('Usar domÃ­nio personalizado'), a:has-text('Use Custom Domain')"
     ).first
     if link_dom.count() > 0 and link_dom.is_visible():
         link_dom.click()
@@ -258,10 +290,10 @@ def iniciar_sessao_sf_tecnico(playwright_ctx, nome_tecnico, codigo_totp="", lat=
                 page.wait_for_timeout(500)
                 if "prod-brasiltecpar" in page.url.lower():
                     break
-            historico.append("1. Entrou via 'Usar domínio personalizado' (prod-brasiltecpar)")
+            historico.append("1. Entrou via 'Usar domÃ­nio personalizado' (prod-brasiltecpar)")
 
     # =========================================================================
-    # PASSO 2: Clicar no botão inferior "Fazer login com Brasil TecPar"
+    # PASSO 2: Clicar no botÃ£o inferior "Fazer login com Brasil TecPar"
     # =========================================================================
     btn_sso = page.locator(
         "#idp_section_buttons button, "
@@ -284,7 +316,7 @@ def iniciar_sessao_sf_tecnico(playwright_ctx, nome_tecnico, codigo_totp="", lat=
                 break
 
     # =========================================================================
-    # PASSO 3: EVO/Okta — Aguarda o spinner inicial e preenche o E-mail
+    # PASSO 3: EVO/Okta â€” Aguarda o spinner inicial e preenche o E-mail
     # =========================================================================
     if "okta.com" in page.url.lower():
         inp_email = page.locator("input[name='identifier'], input#idp-discovery-username, input[type='email']").first
@@ -305,7 +337,7 @@ def iniciar_sessao_sf_tecnico(playwright_ctx, nome_tecnico, codigo_totp="", lat=
                     pass
 
             btn_proximo = page.locator(
-                "input[type='submit'], button[type='submit'], button:has-text('Próximo'), button:has-text('Next')"
+                "input[type='submit'], button[type='submit'], button:has-text('PrÃ³ximo'), button:has-text('Next')"
             ).first
             btn_proximo.click()
             historico.append(f"3. E-mail '{usuario}' enviado")
@@ -316,7 +348,7 @@ def iniciar_sessao_sf_tecnico(playwright_ctx, nome_tecnico, codigo_totp="", lat=
                     break
 
         # =====================================================================
-        # PASSO 4: EVO/Okta — Preenche a Senha e clica em Verificar
+        # PASSO 4: EVO/Okta â€” Preenche a Senha e clica em Verificar
         # =====================================================================
         if inp_senha.count() > 0 and inp_senha.is_visible():
             _preencher_input_react_okta(page, inp_senha, senha)
@@ -335,8 +367,8 @@ def iniciar_sessao_sf_tecnico(playwright_ctx, nome_tecnico, codigo_totp="", lat=
             for _ in range(25):
                 page.wait_for_timeout(500)
                 txt_tela_s = (page.inner_text("body") if page.locator("body").count() > 0 else "").upper()
-                if "NÃO FOI POSSÍVEL FAZER LOGIN" in txt_tela_s or "UNABLE TO SIGN IN" in txt_tela_s:
-                    # Clica no ícone do olho (👁️) para mostrar no print exatamente o que foi digitado no campo
+                if "NÃƒO FOI POSSÃVEL FAZER LOGIN" in txt_tela_s or "UNABLE TO SIGN IN" in txt_tela_s:
+                    # Clica no Ã­cone do olho (ðŸ‘ï¸) para mostrar no print exatamente o que foi digitado no campo
                     olho = page.locator(
                         "span.eyeicon, [data-se*='eye'], button[aria-label*='senha'], button[aria-label*='password'], .password-toggle span"
                     ).first
@@ -349,11 +381,11 @@ def iniciar_sessao_sf_tecnico(playwright_ctx, nome_tecnico, codigo_totp="", lat=
                     page.screenshot(path=ARQUIVO_PRINT_SF_ENCERRAMENTO, full_page=True)
                     browser.close()
                     raise RuntimeError(
-                        f"❌ O EVO/Okta recusou a senha na tela (foram digitados {len(val_conf)} caracteres, "
-                        f"começando com '{senha[:1]}' e terminando com '{senha[-1:]}'). "
+                        f"âŒ O EVO/Okta recusou a senha na tela (foram digitados {len(val_conf)} caracteres, "
+                        f"comeÃ§ando com '{senha[:1]}' e terminando com '{senha[-1:]}'). "
                         f"Etapas: {' -> '.join(historico)}. Veja o print abaixo."
                     )
-                if not inp_senha.is_visible() or "AUTHENTICATOR" in txt_tela_s or "DIGITE O CÓDIGO" in txt_tela_s:
+                if not inp_senha.is_visible() or "AUTHENTICATOR" in txt_tela_s or "DIGITE O CÃ“DIGO" in txt_tela_s:
                     break
 
         btn_escolha_ga = page.locator(
@@ -367,7 +399,7 @@ def iniciar_sessao_sf_tecnico(playwright_ctx, nome_tecnico, codigo_totp="", lat=
                 pass
 
         # =====================================================================
-        # PASSO 5: Google Authenticator (6 dígitos) + Verificar
+        # PASSO 5: Google Authenticator (6 dÃ­gitos) + Verificar
         # =====================================================================
         inp_codigo_ga = page.locator(
             "input[type='text'], input[type='tel'], input[name='credentials.passcode']"
@@ -375,18 +407,18 @@ def iniciar_sessao_sf_tecnico(playwright_ctx, nome_tecnico, codigo_totp="", lat=
 
         for _ in range(15):
             txt_ga = (page.inner_text("body") if page.locator("body").count() > 0 else "").upper()
-            if ("AUTHENTICATOR" in txt_ga or "DIGITE O CÓDIGO" in txt_ga or "TEMPORÁRIO" in txt_ga) and inp_codigo_ga.count() > 0 and inp_codigo_ga.is_visible():
+            if ("AUTHENTICATOR" in txt_ga or "DIGITE O CÃ“DIGO" in txt_ga or "TEMPORÃRIO" in txt_ga) and inp_codigo_ga.count() > 0 and inp_codigo_ga.is_visible():
                 break
             page.wait_for_timeout(400)
 
         txt_ga_atual = (page.inner_text("body") if page.locator("body").count() > 0 else "").upper()
-        if ("AUTHENTICATOR" in txt_ga_atual or "DIGITE O CÓDIGO" in txt_ga_atual or "TEMPORÁRIO" in txt_ga_atual) and inp_codigo_ga.count() > 0 and inp_codigo_ga.is_visible():
+        if ("AUTHENTICATOR" in txt_ga_atual or "DIGITE O CÃ“DIGO" in txt_ga_atual or "TEMPORÃRIO" in txt_ga_atual) and inp_codigo_ga.count() > 0 and inp_codigo_ga.is_visible():
             if not codigo_limpo:
                 page.screenshot(path=ARQUIVO_PRINT_SF_ENCERRAMENTO, full_page=True)
                 browser.close()
                 raise RuntimeError(
-                    f"📱 Senha aceita! Chegou na tela do Google Authenticator ({' -> '.join(historico)}). "
-                    f"Digite os 6 dígitos atuais no campo '🔢 Código Authenticator' e clique novamente."
+                    f"ðŸ“± Senha aceita! Chegou na tela do Google Authenticator ({' -> '.join(historico)}). "
+                    f"Digite os 6 dÃ­gitos atuais no campo 'ðŸ”¢ CÃ³digo Authenticator' e clique novamente."
                 )
 
             _preencher_input_react_okta(page, inp_codigo_ga, codigo_limpo)
@@ -394,7 +426,7 @@ def iniciar_sessao_sf_tecnico(playwright_ctx, nome_tecnico, codigo_totp="", lat=
                 "input[type='submit'], button[type='submit'], button:has-text('Verificar'), button:has-text('Verify')"
             ).first
             btn_verif_ga.click()
-            historico.append(f"5. Código Authenticator ({codigo_limpo}) enviado")
+            historico.append(f"5. CÃ³digo Authenticator ({codigo_limpo}) enviado")
 
         # =====================================================================
         # PASSO 6: Aguarda o redirecionamento SAML do Okta para o Salesforce
@@ -406,30 +438,30 @@ def iniciar_sessao_sf_tecnico(playwright_ctx, nome_tecnico, codigo_totp="", lat=
 
             if any(
                 err in txt_at
-                for err in ["CÓDIGO INVÁLIDO", "INVALID CODE", "TOKEN DOESN'T MATCH", "NÃO CORRESPONDE", "NÃO FOI POSSÍVEL FAZER LOGIN"]
+                for err in ["CÃ“DIGO INVÃLIDO", "INVALID CODE", "TOKEN DOESN'T MATCH", "NÃƒO CORRESPONDE", "NÃƒO FOI POSSÃVEL FAZER LOGIN"]
             ):
                 page.screenshot(path=ARQUIVO_PRINT_SF_ENCERRAMENTO, full_page=True)
                 browser.close()
                 raise RuntimeError(
-                    f"❌ O EVO/Okta recusou o código {codigo_limpo} (pode ter trocado nos últimos segundos). "
-                    f"Aguarde o próximo código de 6 dígitos e tente novamente. ({' -> '.join(historico)})"
+                    f"âŒ O EVO/Okta recusou o cÃ³digo {codigo_limpo} (pode ter trocado nos Ãºltimos segundos). "
+                    f"Aguarde o prÃ³ximo cÃ³digo de 6 dÃ­gitos e tente novamente. ({' -> '.join(historico)})"
                 )
 
             if ("salesforce.com" in url_at or "force.com" in url_at) and "okta.com" not in url_at:
-                historico.append("6. Entrou no domínio Salesforce")
+                historico.append("6. Entrou no domÃ­nio Salesforce")
                 break
 
     # =========================================================================
-    # PASSO 7: Trata tela intermediária pós-login se aparecer
+    # PASSO 7: Trata tela intermediÃ¡ria pÃ³s-login se aparecer
     # =========================================================================
     page.wait_for_timeout(3000)
     btn_pos_login = page.locator(
-        "a:has-text('Ignorar'), a:has-text('Agora não'), a:has-text('Skip'), button:has-text('Verifique sua identidade')"
+        "a:has-text('Ignorar'), a:has-text('Agora nÃ£o'), a:has-text('Skip'), button:has-text('Verifique sua identidade')"
     ).first
     if btn_pos_login.count() > 0 and btn_pos_login.is_visible():
         try:
             btn_pos_login.click()
-            historico.append("7. Tratou tela pós-login")
+            historico.append("7. Tratou tela pÃ³s-login")
             page.wait_for_timeout(3000)
         except Exception:
             pass
@@ -439,7 +471,7 @@ def iniciar_sessao_sf_tecnico(playwright_ctx, nome_tecnico, codigo_totp="", lat=
         url_erro = page.url
         browser.close()
         raise RuntimeError(
-            f"⚠️ Ainda não entrou na área logada da Brasil TecPar (URL atual: {url_erro} | "
+            f"âš ï¸ Ainda nÃ£o entrou na Ã¡rea logada da Brasil TecPar (URL atual: {url_erro} | "
             f"Passos: {' -> '.join(historico)}). Veja o print abaixo."
         )
 
@@ -481,7 +513,7 @@ def inspecionar_fila_e_protocolo_sf(nome_tecnico, protocolo_teste="", codigo_tot
                 abriu_alvo = abrir_compromisso_sa_ou_protocolo(page, protocolo_teste)
                 if abriu_alvo:
                     btn_acoes = page.locator(
-                        "button:has-text('Ações'), a:has-text('Ações'), span:has-text('Ações'), button:has-text('Mostrar mais ações')"
+                        "button:has-text('AÃ§Ãµes'), a:has-text('AÃ§Ãµes'), span:has-text('AÃ§Ãµes'), button:has-text('Mostrar mais aÃ§Ãµes')"
                     ).first
                     if btn_acoes.count() > 0 and btn_acoes.is_visible():
                         btn_acoes.click()
@@ -503,13 +535,13 @@ def inspecionar_fila_e_protocolo_sf(nome_tecnico, protocolo_teste="", codigo_tot
             browser.close()
 
             resumo = (
-                f"✅ Conectado de verdade no Salesforce Brasil TecPar ({nome_tecnico})! "
+                f"âœ… Conectado de verdade no Salesforce Brasil TecPar ({nome_tecnico})! "
                 f"URL: {url_logada} | "
                 f"SAs encontradas: {sas_na_fila or 'Nenhuma na lista recente'} | "
                 f"Ordens: {ordens_na_fila or 'Nenhuma na lista recente'}. "
             )
             if protocolo_teste:
-                resumo += f"Protocolo '{protocolo_teste}' aberto: {abriu_alvo} | Ações mapeadas: {list(dict.fromkeys(acoes_encontradas))}"
+                resumo += f"Protocolo '{protocolo_teste}' aberto: {abriu_alvo} | AÃ§Ãµes mapeadas: {list(dict.fromkeys(acoes_encontradas))}"
             return True, resumo
     except Exception as e:
         return False, str(e)
@@ -550,7 +582,7 @@ def abrir_compromisso_sa_ou_protocolo(page, protocolo_ou_sa, cliente_nome=""):
 
 def acionar_menu_acao_sf(page, nome_acao):
     btn_acoes = page.locator(
-        "button:has-text('Ações'), a:has-text('Ações'), span:has-text('Ações'), button:has-text('Mostrar mais ações')"
+        "button:has-text('AÃ§Ãµes'), a:has-text('AÃ§Ãµes'), span:has-text('AÃ§Ãµes'), button:has-text('Mostrar mais aÃ§Ãµes')"
     ).first
     if btn_acoes.count() > 0 and btn_acoes.is_visible():
         btn_acoes.click()
@@ -568,7 +600,7 @@ def acionar_menu_acao_sf(page, nome_acao):
 
 
 def executar_confirmacao_e_checkin(page):
-    if acionar_menu_acao_sf(page, "Aceitar Compromisso de Serviço"):
+    if acionar_menu_acao_sf(page, "Aceitar Compromisso de ServiÃ§o"):
         sel_status = page.locator("select, [role='combobox'], button:has-text('Agendado')").first
         if sel_status.count() > 0:
             try:
@@ -668,7 +700,7 @@ def anexar_fotos_etapa_sf(page, lista_caminhos_fotos):
 
 
 def clicar_avancar_ou_concluir_sf(page):
-    for texto_btn in ["Avançar", "Concluir", "Concluído", "Next", "Finish", "Salvar"]:
+    for texto_btn in ["AvanÃ§ar", "Concluir", "ConcluÃ­do", "Next", "Finish", "Salvar"]:
         btn = page.locator(f"button:has-text('{texto_btn}'), span:has-text('{texto_btn}')").first
         if btn.count() > 0 and btn.is_visible():
             btn.scroll_into_view_if_needed()
@@ -699,14 +731,14 @@ def desenhar_assinatura_manuscrita_canvas(page):
 
 def gerar_dois_documentos_servico_sf(page, nome_tecnico_assinatura, nome_cliente):
     modelos = [
-        "PDF Técnico - Compromisso de Serviço",
+        "PDF TÃ©cnico - Compromisso de ServiÃ§o",
         "PDF - Checklist",
     ]
     gerados = 0
 
     for modelo in modelos:
-        if not acionar_menu_acao_sf(page, "Criar documento de serviço"):
-            acionar_menu_acao_sf(page, "Criar Documento de Serviço")
+        if not acionar_menu_acao_sf(page, "Criar documento de serviÃ§o"):
+            acionar_menu_acao_sf(page, "Criar Documento de ServiÃ§o")
 
         op_mod = page.locator(f"span:has-text('{modelo}'), div:has-text('{modelo}')").first
         if op_mod.count() > 0 and op_mod.is_visible():
@@ -738,6 +770,6 @@ def executar_checkout_final_sf(page):
         clicar_avancar_ou_concluir_sf(page)
         page.wait_for_timeout(2500)
         page.screenshot(path=ARQUIVO_PRINT_SF_ENCERRAMENTO, full_page=True)
-        return True, "Check Out concluído com sucesso no Salesforce!"
+        return True, "Check Out concluÃ­do com sucesso no Salesforce!"
     page.screenshot(path=ARQUIVO_PRINT_SF_ENCERRAMENTO, full_page=True)
-    return False, "Não foi possível localizar a ação de Check Out."
+    return False, "NÃ£o foi possÃ­vel localizar a aÃ§Ã£o de Check Out."
