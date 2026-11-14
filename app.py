@@ -5,10 +5,11 @@ import csv
 import html
 import json
 import time
+import threading
 import urllib.parse
 import urllib.request
 import webbrowser
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import streamlit as st
 import pandas as pd
@@ -51,6 +52,7 @@ from modulo_assertec import (
     mapear_para_assertec,
     salvar_na_fila_assertec,
 )
+import modulo_planilhas as mp
 from modulo_planilhas import (
     registrar_servico_na_planilha_tecnico,
     sincronizar_status_e_auditar_planilhas,
@@ -58,13 +60,154 @@ from modulo_planilhas import (
     carregar_log_auto_sync,
     exibir_painel_financeiro_exclusivo,
 )
-iniciar_agendador_12h_21h()
 from modulo_robos import (
     carregar_agenda_sf_cache,
     sincronizar_agenda_salesforce,
     executar_lancamento_amigo_seguro,
     buscar_status_portal_amigo_sob_demanda,
 )
+
+# ==============================================================================
+# TRAVA ANTI-DUPLICIDADE E GARANTIA DO AGENDADOR 12H / 21H (DIRETO NO APP.PY)
+# ==============================================================================
+ARQUIVO_TRAVA_DUPLICIDADE = "trava_lancamentos_enviados.json"
+_LOCK_CLICK_LANCAMENTO = threading.Lock()
+_WATCHDOG_12_21_ATIVO = False
+
+
+def _agora_br():
+    return datetime.now(timezone(timedelta(hours=-3)))
+
+
+def _carregar_trava_local():
+    if os.path.exists(ARQUIVO_TRAVA_DUPLICIDADE):
+        try:
+            with open(ARQUIVO_TRAVA_DUPLICIDADE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"chaves": {}}
+
+
+def _salvar_trava_local(dados):
+    try:
+        with open(ARQUIVO_TRAVA_DUPLICIDADE, "w", encoding="utf-8") as f:
+            json.dump(dados, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def _gerar_chaves_os_trava(dados_os):
+    proto = re.sub(r"\D", "", re.sub(r"\.0+$", "", str(dados_os.get("protocolo", "")).strip()))
+    cli = re.sub(r"\s+", " ", str(dados_os.get("cliente", "")).upper()).strip()
+    data_str = str(dados_os.get("data", _agora_br().strftime("%d/%m/%Y")))[:10]
+    cidade = str(dados_os.get("cidade", ""))
+
+    lista_srv = dados_os.get("servicos", [])
+    if not lista_srv and dados_os.get("servico"):
+        lista_srv = [{"nome": dados_os.get("servico"), "cabo": dados_os.get("cabo", 1), "eh_principal": True}]
+
+    chaves = []
+    for s in lista_srv:
+        qtd_cabo = s.get("cabo", 0) if s.get("eh_principal", True) else s.get("lpu", 1)
+        if hasattr(mp, "traduzir_servico_para_planilha"):
+            nome_plan = mp.traduzir_servico_para_planilha(s.get("nome", ""), qtd_cabo, cidade).upper().strip()
+        else:
+            nome_plan = str(s.get("nome", "")).upper().strip()
+
+        if "PLANTAO" in nome_plan or "PLANTÃO" in nome_plan or proto == "123456":
+            chaves.append(f"PLANTAO|{data_str}|{nome_plan}")
+        else:
+            chaves.append(f"OS|{proto}|{cli}|{nome_plan}")
+    return chaves
+
+
+def verificar_se_os_ja_foi_lancada(dados_os):
+    """Bloqueia cliques repetidos e impede lançar duas vezes o mesmo protocolo/serviço."""
+    proto = re.sub(r"\D", "", re.sub(r"\.0+$", "", str(dados_os.get("protocolo", "")).strip()))
+    cli = str(dados_os.get("cliente", "")).strip().upper()
+    chaves_os = _gerar_chaves_os_trava(dados_os)
+
+    # 1. Verifica trava imediata de cliques (memória da sessão + arquivo local)
+    chaves_sessao = st.session_state.setdefault("_chaves_os_ja_enviadas", {})
+    for ch in chaves_os:
+        if ch in chaves_sessao:
+            return True, (
+                f"🚫 **TRAVA ANTI-DUPLICIDADE:** O protocolo **{proto}** ({cli}) já foi enviado às "
+                f"`{chaves_sessao[ch]}`! Clique repetido bloqueado para não duplicar na Planilha, Assertec e Amigo."
+            )
+
+    trava = _carregar_trava_local()
+    chaves_disco = trava.get("chaves", {})
+    for ch in chaves_os:
+        if ch in chaves_disco:
+            return True, (
+                f"🚫 **TRAVA ANTI-DUPLICIDADE:** O protocolo **{proto}** ({cli}) já foi lançado em "
+                f"`{chaves_disco[ch]}`! O sistema bloqueou este envio repetido."
+            )
+
+    # 2. Verifica se já consta na planilha da Assertec (para protocolos normais != 123456)
+    if proto and proto != "123456" and hasattr(mp, "ler_dados_auditoria_assertec"):
+        try:
+            res_ass = mp.ler_dados_auditoria_assertec()
+            mapa_assertec = res_ass[0] if isinstance(res_ass, tuple) and len(res_ass) > 0 else {}
+            if proto in mapa_assertec and mapa_assertec[proto].get("status") == "OK":
+                if len(dados_os.get("servicos", [])) <= 1:
+                    return True, (
+                        f"🚫 **TRAVA ANTI-DUPLICIDADE (ASSERTEC):** O protocolo **{proto}** ({cli}) "
+                        f"já consta na planilha da Assertec! Envio repetido bloqueado."
+                    )
+        except Exception:
+            pass
+
+    return False, ""
+
+
+def registrar_os_na_trava_duplicidade(dados_os):
+    agora_fmt = _agora_br().strftime("%d/%m/%Y às %H:%M:%S")
+    chaves_os = _gerar_chaves_os_trava(dados_os)
+    chaves_sessao = st.session_state.setdefault("_chaves_os_ja_enviadas", {})
+    trava = _carregar_trava_local()
+    for ch in chaves_os:
+        chaves_sessao[ch] = agora_fmt
+        trava.setdefault("chaves", {})[ch] = agora_fmt
+    _salvar_trava_local(trava)
+
+
+def _iniciar_watchdog_12h_21h_garantido():
+    """Garante que a checagem das 12h e das 21h rode mesmo se o minuto 00..30 tiver passado."""
+    global _WATCHDOG_12_21_ATIVO
+    iniciar_agendador_12h_21h()
+    if _WATCHDOG_12_21_ATIVO:
+        return
+    _WATCHDOG_12_21_ATIVO = True
+
+    def _loop_garantia():
+        while True:
+            try:
+                agora = _agora_br()
+                hoje_iso = agora.strftime("%Y-%m-%d")
+                hora = agora.hour
+                turno_esperado = None
+                if 12 <= hora < 21:
+                    turno_esperado = f"{hoje_iso}_12H"
+                elif hora >= 21:
+                    turno_esperado = f"{hoje_iso}_21H"
+
+                if turno_esperado and hasattr(mp, "executar_checagem_background_silenciosa"):
+                    log_atual = carregar_log_auto_sync()
+                    if log_atual.get("ultimo_turno") != turno_esperado:
+                        if hasattr(mp, "salvar_log_auto_sync"):
+                            mp.salvar_log_auto_sync(turno_esperado, "Executando checagem automática...")
+                        mp.executar_checagem_background_silenciosa(turno_esperado)
+            except Exception:
+                pass
+            time.sleep(25)
+
+    threading.Thread(target=_loop_garantia, daemon=True).start()
+
+
+_iniciar_watchdog_12h_21h_garantido()
 
 # ==============================================================================
 # CONFIGURAÇÃO VISUAL DA PÁGINA
@@ -122,6 +265,51 @@ components.html(
     """,
     height=0,
 )
+
+
+def acionar_rolagem_automatica_lancamento(passo_id="1"):
+    """
+    Faz a página do celular/computador rolar automaticamente para baixo conforme
+    cada etapa e resultado do lançamento vai aparecendo na tela.
+    """
+    st.markdown(f"<div id='ancora_scroll_{passo_id}'></div>", unsafe_allow_html=True)
+    components.html(
+        f"""
+        <script>
+        (function() {{
+            const doc = window.parent.document;
+            const rolarAteOFim = () => {{
+                const anc = doc.getElementById('ancora_scroll_{passo_id}');
+                if (anc) {{
+                    anc.scrollIntoView({{ behavior: 'smooth', block: 'end' }});
+                }}
+                const containers = doc.querySelectorAll('[data-testid="stAppViewContainer"], [data-testid="stMain"], section.main');
+                containers.forEach(c => {{
+                    c.scrollTo({{ top: c.scrollHeight, behavior: 'smooth' }});
+                }});
+                window.parent.scrollTo({{ top: doc.body.scrollHeight, behavior: 'smooth' }});
+            }};
+            rolarAteOFim();
+            setTimeout(rolarAteOFim, 250);
+            setTimeout(rolarAteOFim, 700);
+
+            if (!window.parent._observadorScrollAtivo) {{
+                window.parent._observadorScrollAtivo = true;
+                const obsScroll = new MutationObserver(() => {{
+                    if (window.parent._lancamentoEmAndamento) {{
+                        rolarAteOFim();
+                    }}
+                }});
+                obsScroll.observe(doc.body, {{ childList: true, subtree: true }});
+            }}
+            window.parent._lancamentoEmAndamento = true;
+            setTimeout(() => {{ window.parent._lancamentoEmAndamento = false; }}, 45000);
+        }})();
+        </script>
+        """,
+        height=0,
+    )
+
 
 # ==============================================================================
 # FUNÇÕES DE APOIO PARA AGENDAMENTOS (CSV & GOOGLE SHEETS)
@@ -457,7 +645,12 @@ if aba_gestao is not None:
                     "obs": st.session_state.get("obs", ""),
                     "servicos": [{"nome": st.session_state.get("servico", ""), "cabo": qtd_num, "eh_principal": True}]
                 }
-                registrar_servico_na_planilha_tecnico(dados_manual)
+                ja_lancado_m, msg_trava_m = verificar_se_os_ja_foi_lancada(dados_manual)
+                if ja_lancado_m:
+                    st.error(msg_trava_m)
+                else:
+                    registrar_os_na_trava_duplicidade(dados_manual)
+                    registrar_servico_na_planilha_tecnico(dados_manual)
 
         st.markdown("---")
         st.subheader("🔍 Consulta Global de Cliente / Protocolo (Assertec)")
@@ -591,6 +784,9 @@ with aba_gerador:
         )
 
     if clicou_lancar_unico:
+        # Assim que o técnico aperta o botão, rola a tela imediatamente para baixo!
+        acionar_rolagem_automatica_lancamento("inicio")
+
         t_ok = tecnico_selecionado != "Escolher..."
         c_ok = cidade_gen != "Escolher..."
         s_ok = servico_principal_curto != "Escolher..."
@@ -599,6 +795,7 @@ with aba_gerador:
 
         if not (t_ok and c_ok and s_ok and cli_ok and p_ok):
             st.error("⚠️ Preencha todos os campos obrigatórios (*): Técnico, Cliente, Protocolo, Cidade e Serviço Principal.")
+            acionar_rolagem_automatica_lancamento("erro_campos")
         else:
             servico_prin_oficial = obter_nome_oficial_servico(servico_principal_curto)
             batimento_oficial = obter_nome_oficial_servico(batimento_curto)
@@ -648,35 +845,68 @@ with aba_gerador:
                 "obs": obs_padrao_final
             }
 
-            salvar_na_fila_assertec(dados_os_atual)
+            with _LOCK_CLICK_LANCAMENTO:
+                ja_lancado, msg_bloqueio = verificar_se_os_ja_foi_lancada(dados_os_atual)
+                if not ja_lancado:
+                    # Registra imediatamente na trava para bloquear qualquer segundo clique do técnico!
+                    registrar_os_na_trava_duplicidade(dados_os_atual)
 
-            # 1º PASSO: Grava IMEDIATAMENTE na planilha do técnico
-            with st.spinner("📊 Gravando serviço na planilha do técnico..."):
-                registrar_servico_na_planilha_tecnico(dados_os_atual)
-
-            # 2º PASSO: Avisa que o protocolo já foi enviado
-            st.info("✅ Protocolo enviado! Já pode fechar a página, mas se preferir pode aguardar o relatório do lançamento abaixo.")
-
-            # 3º PASSO: Executa o lançamento em 2º plano blindado (Formulário Assertec + Portal Amigo)
-            with st.spinner("🤖 Enviando para o Formulário Assertec e Portal Brasil TecPar (AMIGO)..."):
-                ok_tecpar, msg_tecpar, ok_assertec, msg_assertec = executar_lancamento_amigo_seguro(dados_os_atual)
-
-            if ok_assertec:
-                st.success(msg_assertec)
+            if ja_lancado:
+                st.error(msg_bloqueio)
+                acionar_rolagem_automatica_lancamento("bloqueado_dup")
             else:
-                st.error(msg_assertec)
+                salvar_na_fila_assertec(dados_os_atual)
 
-            if vai_amigo:
-                if ok_tecpar:
-                    st.success(f"🟢 SERVIÇO CONFIRMADO NO SISTEMA AMIGO! ({msg_tecpar})")
-                    sincronizar_status_e_auditar_planilhas(silencioso=True)
+                # Detector automático caso a planilha Google informe que o serviço "JÁ ESTAVA GRAVADO"
+                detectou_ja_gravado = {"duplicado": False}
+                _st_info_orig = st.info
+
+                def _st_info_intercept(texto_msg, *args, **kwargs):
+                    if "JÁ ESTAVA GRAVADO" in str(texto_msg).upper():
+                        detectou_ja_gravado["duplicado"] = True
+                    return _st_info_orig(texto_msg, *args, **kwargs)
+
+                # 1º PASSO: Grava IMEDIATAMENTE na planilha do técnico e rola a tela
+                with st.spinner("📊 Etapa 1/3: Gravando serviço na planilha do técnico..."):
+                    try:
+                        st.info = _st_info_intercept
+                        status_plan = registrar_servico_na_planilha_tecnico(dados_os_atual)
+                    finally:
+                        st.info = _st_info_orig
+                acionar_rolagem_automatica_lancamento("etapa1")
+
+                # Se já existia na planilha do técnico, trava aqui e jamais duplica na Assertec nem no Portal Amigo!
+                if status_plan == "DUPLICADO" or detectou_ja_gravado["duplicado"]:
+                    st.warning("🛑 **TRAVA ANTI-DUPLICIDADE:** Como este serviço já estava gravado na planilha do técnico, o envio para o Formulário Assertec e Portal Amigo foi bloqueado para evitar duplicidade.")
+                    acionar_rolagem_automatica_lancamento("fim_duplicado")
                 else:
-                    st.warning(msg_tecpar)
-                if os.path.exists(ARQUIVO_PRINT_PORTAL):
-                    with st.expander("📸 Ver Print da Tela do Portal Brasil TecPar (Conferência Visual)", expanded=not ok_tecpar):
-                        st.image(ARQUIVO_PRINT_PORTAL, caption="Tela final do portal Brasil TecPar após a execução do robô")
-            else:
-                sincronizar_status_e_auditar_planilhas(silencioso=True)
+                    # 2º PASSO: Avisa que o protocolo está em andamento e rola a tela
+                    st.info("✅ Etapa 2/3: Gravado na planilha! Enviando agora para a Assertec e Portal Amigo...")
+                    acionar_rolagem_automatica_lancamento("etapa2")
+
+                    # 3º PASSO: Executa o lançamento em 2º plano blindado (Formulário Assertec + Portal Amigo)
+                    with st.spinner("🤖 Etapa 3/3: Enviando para o Formulário Assertec e Portal Brasil TecPar (AMIGO)..."):
+                        ok_tecpar, msg_tecpar, ok_assertec, msg_assertec = executar_lancamento_amigo_seguro(dados_os_atual)
+
+                    if ok_assertec:
+                        st.success(msg_assertec)
+                    else:
+                        st.error(msg_assertec)
+                    acionar_rolagem_automatica_lancamento("etapa3_ass")
+
+                    if vai_amigo:
+                        if ok_tecpar:
+                            st.success(f"🟢 SERVIÇO CONFIRMADO NO SISTEMA AMIGO! ({msg_tecpar})")
+                            sincronizar_status_e_auditar_planilhas(silencioso=True)
+                        else:
+                            st.warning(msg_tecpar)
+                        if os.path.exists(ARQUIVO_PRINT_PORTAL):
+                            with st.expander("📸 Ver Print da Tela do Portal Brasil TecPar (Conferência Visual)", expanded=not ok_tecpar):
+                                st.image(ARQUIVO_PRINT_PORTAL, caption="Tela final do portal Brasil TecPar após a execução do robô")
+                    else:
+                        sincronizar_status_e_auditar_planilhas(silencioso=True)
+
+                    acionar_rolagem_automatica_lancamento("etapa_final")
 
 # ==============================================================================
 # ABA 3: CENTRAL DE AGENDAMENTOS (PC & SMARTPHONE)

@@ -989,12 +989,11 @@ def enviar_formulario_assertec_playwright(dados_os):
     mercado = dados_os.get("mercado", "AMIGO - VAREJO")
 
     tecnico_raw = str(dados_os.get("tecnico_exec", "ANDERSON")).upper()
-    if "ANDERSON" in tecnico_raw:
-        nome_tecnico = "Anderson"
-    elif "BRUNO" in tecnico_raw:
-        nome_tecnico = "Bruno"
-    else:
+    if "MARCIO" in tecnico_raw or "MÁRCIO" in tecnico_raw:
         nome_tecnico = "Marcio"
+    else:
+        # Bruno ainda não consta na planilha Assertec; envia exclusivamente no nome do Anderson
+        nome_tecnico = "Anderson"
 
     data_str = str(dados_os.get("data", datetime.now().strftime("%d/%m/%Y")))[:10]
     dt = None

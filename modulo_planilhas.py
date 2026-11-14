@@ -23,8 +23,11 @@ CIDADES_BASE_NORMAL = {
 
 ARQUIVO_LOG_AUTO_SYNC = "ultimo_sync_automatico.json"
 ARQUIVO_CONTROLE_WPP_DIA = "controle_whatsapp_diario.json"
-_AGENDADOR_INICIADO = False
+ARQUIVO_TRAVA_DUPLICIDADE = "historico_lancamentos_travados.json"
+
+_THREAD_AGENDADOR = None
 _LOCK_AGENDADOR = threading.Lock()
+_LOCK_LANCAMENTO_UNICO = threading.Lock()
 
 
 def obter_agora_brasil():
@@ -145,6 +148,94 @@ def traduzir_servico_para_planilha(nome_servico, metragem_cabo=0, cidade=""):
 
 
 # ==============================================================================
+# TRAVA DEFINITIVA ANTI-DUPLICIDADE (PLANILHA + ASSERTEC + PORTAL AMIGO)
+# ==============================================================================
+def _carregar_trava_duplicidade():
+    if os.path.exists(ARQUIVO_TRAVA_DUPLICIDADE):
+        try:
+            with open(ARQUIVO_TRAVA_DUPLICIDADE, "r", encoding="utf-8") as f:
+                dados = json.load(f)
+                if isinstance(dados, dict):
+                    return dados
+        except Exception:
+            pass
+    return {}
+
+
+def _salvar_trava_duplicidade(dados):
+    try:
+        with open(ARQUIVO_TRAVA_DUPLICIDADE, "w", encoding="utf-8") as f:
+            json.dump(dados, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def gerar_chave_anti_duplicidade(protocolo, nome_servico, cliente="", tecnico="", data_str=""):
+    """
+    Gera a chave única de um serviço para impedir que seja lançado 2x:
+    - Para serviços normais: Protocolo + Tipo de Serviço Traduzido.
+    - Para Plantão (123456): Data + Técnico + Tipo de Plantão.
+    """
+    proto_limpo = limpar_protocolo_planilha(protocolo)
+    srv_plan = normalizar_nome_cliente(traduzir_servico_para_planilha(nome_servico))
+    cli_norm = normalizar_nome_cliente(cliente)
+    tec_norm = normalizar_nome_cliente(tecnico)
+    eh_plantao = "PLANTAO" in srv_plan or proto_limpo == "123456"
+
+    if eh_plantao:
+        dt_ref = str(data_str or obter_agora_brasil().strftime("%d/%m/%Y"))[:10]
+        return f"PLANTAO|{dt_ref}|{tec_norm}|{srv_plan}"
+    return f"PROTO|{proto_limpo}|{srv_plan}|{cli_norm[:12]}"
+
+
+def verificar_se_ja_foi_lancado(dados_os):
+    """
+    Verifica ANTES de qualquer envio se o protocolo + serviço já foi lançado
+    (bloqueando múltiplos cliques no botão de lançamento).
+    """
+    proto = limpar_protocolo_planilha(dados_os.get("protocolo", ""))
+    cli = dados_os.get("cliente", "")
+    tec = dados_os.get("tecnico_exec", "")
+    dt_str = dados_os.get("data", "")
+    servicos = dados_os.get("servicos", [])
+
+    with _LOCK_LANCAMENTO_UNICO:
+        trava = _carregar_trava_duplicidade()
+        for s in servicos:
+            ch = gerar_chave_anti_duplicidade(proto, s.get("nome", ""), cli, tec, dt_str)
+            if ch in trava:
+                info_ant = trava[ch]
+                return True, (
+                    f"🛑 **TRAVA ANTI-DUPLICIDADE ATIVADA:** O protocolo **{proto}** "
+                    f"(Cliente: **{cli}** | Serviço: **{s.get('nome')}**) já foi enviado em `{info_ant.get('data_hora')}`! "
+                    f"O sistema bloqueou este clique repetido para não duplicar na Planilha, na Assertec e no Portal Amigo."
+                )
+    return False, ""
+
+
+def registrar_chave_lancada_com_sucesso(dados_os):
+    """Grava no registro de trava que o serviço já foi enviado."""
+    proto = limpar_protocolo_planilha(dados_os.get("protocolo", ""))
+    cli = dados_os.get("cliente", "")
+    tec = dados_os.get("tecnico_exec", "")
+    dt_str = dados_os.get("data", "")
+    agora_fmt = obter_agora_brasil().strftime("%d/%m/%Y às %H:%M:%S")
+
+    with _LOCK_LANCAMENTO_UNICO:
+        trava = _carregar_trava_duplicidade()
+        for s in dados_os.get("servicos", []):
+            ch = gerar_chave_anti_duplicidade(proto, s.get("nome", ""), cli, tec, dt_str)
+            trava[ch] = {
+                "protocolo": proto,
+                "cliente": str(cli).upper(),
+                "tecnico": str(tec).upper(),
+                "servico": s.get("nome", ""),
+                "data_hora": agora_fmt
+            }
+        _salvar_trava_duplicidade(trava)
+
+
+# ==============================================================================
 # CONTROLE DE LANÇAMENTOS DO DIA E DISPARO INCREMENTAL WHATSAPP (12H E 21H)
 # ==============================================================================
 def _carregar_controle_wpp_dia():
@@ -198,6 +289,10 @@ def registrar_lancamento_local_para_turno(tecnico, cliente, protocolo, servico):
 
 
 def registrar_servico_na_planilha_tecnico(dados_os):
+    """
+    Grava o serviço na planilha do técnico e verifica se a planilha acusou 'ja_existia'.
+    Se já existia na planilha do técnico, retorna False para travar o envio repetido à Assertec e Amigo!
+    """
     tecnico = str(dados_os.get("tecnico_exec", "ANDERSON")).upper()
     if "ANDERSON" in tecnico:
         nome_planilha = "SERVIÇOS AUTOMATIZADOS ANDERSON"
@@ -234,12 +329,12 @@ def registrar_servico_na_planilha_tecnico(dados_os):
     for s in lista_srv_bruta:
         qtd_cabo = s.get("cabo", 0) if s.get("eh_principal", True) else s.get("lpu", 1)
         nome_plan = traduzir_servico_para_planilha(s.get("nome", ""), qtd_cabo, cidade_os)
-        lista_srv.append({"nome": nome_plan, "cabo": qtd_cabo})
+        lista_srv.append({"nome": nome_plan, "cabo": qtd_cabo, "nome_original": s.get("nome", "")})
 
     if not lista_srv and dados_os.get("servico"):
         qtd_cabo = dados_os.get("cabo", 0)
         nome_plan = traduzir_servico_para_planilha(dados_os.get("servico", ""), qtd_cabo, cidade_os)
-        lista_srv = [{"nome": nome_plan, "cabo": qtd_cabo}]
+        lista_srv = [{"nome": nome_plan, "cabo": qtd_cabo, "nome_original": dados_os.get("servico", "")}]
 
     nome_srv_principal = lista_srv[0]["nome"] if lista_srv else ""
     registrar_lancamento_local_para_turno(
@@ -257,7 +352,7 @@ def registrar_servico_na_planilha_tecnico(dados_os):
         "protocolo": protocolo_atual,
         "cidade": cidade_os,
         "obs": dados_os.get("obs", ""),
-        "servicos": lista_srv
+        "servicos": [{"nome": x["nome"], "cabo": x["cabo"]} for x in lista_srv]
     }
 
     try:
@@ -265,19 +360,42 @@ def registrar_servico_na_planilha_tecnico(dados_os):
 
         if dados_resp.get("ok"):
             aba_usada = dados_resp.get("aba", nome_aba)
-            for item in dados_resp.get("resultados", []):
+            resultados = dados_resp.get("resultados", [])
+            qtd_novos = 0
+            servicos_ja_existentes_nomes = set()
+
+            for item in resultados:
                 srv_txt = item.get("servico", "")
                 lin_txt = item.get("linha", "?")
                 if item.get("ja_existia"):
-                    st.info(
-                        f'ℹ️ SERVIÇO "{srv_txt}" JÁ ESTAVA GRAVADO NA LINHA "{lin_txt}" '
-                        f'DA PLANILHA {nome_planilha} (Aba: {aba_usada})'
+                    servicos_ja_existentes_nomes.add(normalizar_nome_cliente(srv_txt))
+                    st.warning(
+                        f'🛑 TRAVA DE DUPLICIDADE: O serviço "{srv_txt}" (Protocolo {protocolo_atual}) '
+                        f'JÁ ESTAVA GRAVADO na linha "{lin_txt}" da planilha {nome_planilha}! '
+                        f'O envio repetido para Assertec e Amigo foi bloqueado.'
                     )
                 else:
+                    qtd_novos += 1
                     st.success(
                         f'🟢 SERVIÇO "{srv_txt}" GRAVADO NA LINHA "{lin_txt}" '
                         f'DA PLANILHA {nome_planilha} (Aba: {aba_usada})'
                     )
+
+            # Filtra em dados_os["servicos"] apenas os serviços que NÃO estavam duplicados na planilha
+            if servicos_ja_existentes_nomes and dados_os.get("servicos"):
+                novos_servicos_os = []
+                for s_orig in dados_os["servicos"]:
+                    qtd_c = s_orig.get("cabo", 0) if s_orig.get("eh_principal", True) else s_orig.get("lpu", 1)
+                    n_trad = normalizar_nome_cliente(traduzir_servico_para_planilha(s_orig.get("nome", ""), qtd_c, cidade_os))
+                    if n_trad not in servicos_ja_existentes_nomes:
+                        novos_servicos_os.append(s_orig)
+                dados_os["servicos"] = novos_servicos_os
+
+            registrar_chave_lancada_com_sucesso(dados_os)
+
+            # Se todos os serviços já existiam na planilha, retorna False para travar Assertec e Amigo!
+            if resultados and qtd_novos == 0:
+                return False
             return True
         else:
             st.error(f"⚠️ Erro retornado pela planilha: {dados_resp.get('msg') or dados_resp}")
@@ -288,7 +406,6 @@ def registrar_servico_na_planilha_tecnico(dados_os):
 
 
 def _buscar_valor_coluna_flexivel(row_dict_norm, palavras_chave, excluir_palavras=()):
-    """Localiza o valor de uma coluna mesmo que o cabeçalho tenha acentos, espaços extras ou maiúsculas diferentes."""
     for nome_col_norm, valor in row_dict_norm.items():
         if any(ex in nome_col_norm for ex in excluir_palavras):
             continue
@@ -297,10 +414,22 @@ def _buscar_valor_coluna_flexivel(row_dict_norm, palavras_chave, excluir_palavra
     return ""
 
 
+def _data_texto_eh_hoje(texto_data, agora_dt):
+    """Reconhece se uma string de data/carimbo pertence ao dia de hoje em formatos BR, ISO ou US."""
+    t = str(texto_data or "").strip()
+    if not t:
+        return False
+    d_br = agora_dt.strftime("%d/%m/%Y")
+    d_iso = agora_dt.strftime("%Y-%m-%d")
+    d_curto = f"{agora_dt.day}/{agora_dt.month}/{agora_dt.year}"
+    d_us = f"{agora_dt.month}/{agora_dt.day}/{agora_dt.year}"
+    return any(fmt in t for fmt in (d_br, d_iso, d_curto, d_us))
+
+
 def ler_dados_auditoria_assertec():
     """
-    Lê a planilha da Assertec extraindo o ID com segurança (mesmo que a URL tenha /export?format=csv)
-    e identifica as colunas de forma flexível (sem depender de maiúsculas/minúsculas exatas).
+    Lê a planilha da Assertec extraindo os protocolos, clientes e lançamentos do dia de hoje
+    (mesmo quando lançados pelo celular na nuvem).
     """
     mapa_assertec = {}
     mapa_clientes_assertec = {}
@@ -308,8 +437,7 @@ def ler_dados_auditoria_assertec():
     assinaturas_distintas_assertec = {}
     tem_plantao_na_assertec = False
 
-    hoje_br = obter_agora_brasil().strftime("%d/%m/%Y")
-    hoje_iso = obter_agora_brasil().strftime("%Y-%m-%d")
+    agora_br = obter_agora_brasil()
 
     match_id = re.search(r"/d/([a-zA-Z0-9-_]+)", str(ASSERTEC_PLANILHA_URL or ""))
     sheet_id = match_id.group(1) if match_id else "1MMQ8PAjr2GQfWxPnfYNfHSiiu9AUdE0pvfJikSGQgqU"
@@ -317,8 +445,12 @@ def ler_dados_auditoria_assertec():
 
     urls_tentativa = [
         f"{base_url}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote('Retorno Formulario')}",
+        f"{base_url}/gviz/tq?tqx=out:csv&sheet={urllib.parse.quote('Retorno Formulário')}",
         f"{base_url}/export?format=csv",
     ]
+
+    ctrl = _carregar_controle_wpp_dia()
+    alterou_ctrl = False
 
     for csv_url in urls_tentativa:
         try:
@@ -400,18 +532,18 @@ def ler_dados_auditoria_assertec():
                 if cli_norm:
                     assinaturas_distintas_assertec.setdefault(cli_norm, set()).add(assinatura_detalhe)
 
-                if hoje_br in carimbo or hoje_iso in carimbo:
+                # Se foi enviado hoje (por qualquer celular/PC), registra para o relatório WhatsApp das 12h e 21h
+                if _data_texto_eh_hoje(carimbo, agora_br) or _data_texto_eh_hoje(data_srv, agora_br):
                     hora_envio = 10
                     m_hora = re.search(r"(\d{1,2}):(\d{2})", carimbo)
                     if m_hora:
                         hora_envio = int(m_hora.group(1))
-                    ctrl = _carregar_controle_wpp_dia()
                     tec_id = "ANDERSON"
                     if "BRUNO" in tec_form:
                         tec_id = "BRUNO"
                     elif "MARCIO" in tec_form or "MÁRCIO" in tec_form:
                         tec_id = "MARCIO"
-                    chave_u = f"{tec_id}|{proto}|{cli_norm}|{srv_norm}"
+                    chave_u = f"{tec_id}|{proto}|{cli_norm}"
                     if not any(x.get("chave") == chave_u for x in ctrl["lancados_hoje"]):
                         ctrl["lancados_hoje"].append({
                             "chave": chave_u,
@@ -422,12 +554,15 @@ def ler_dados_auditoria_assertec():
                             "hora": f"{hora_envio:02d}:00:00",
                             "antes_das_12h": hora_envio < 12
                         })
-                        _salvar_controle_wpp_dia(ctrl)
+                        alterou_ctrl = True
 
             if mapa_assertec or mapa_clientes_assertec:
                 break
         except Exception:
             continue
+
+    if alterou_ctrl:
+        _salvar_controle_wpp_dia(ctrl)
 
     if tem_plantao_na_assertec or "123456" in mapa_assertec:
         ok_plantao = {"status": "OK", "motivo": "Plantão validado na planilha Assertec"}
@@ -472,6 +607,10 @@ def _enriquecer_mapa_amigo_para_planilha(mapa_amigo_bruto, mapa_assertec, mapa_c
 
 
 def _auditar_planilhas_e_barrar_duplicados(dados, mapa_amigo, mapa_assertec, mapa_clientes_assertec, assinaturas_distintas_assertec):
+    """
+    Audita TANTO os serviços autorizados QUANTO os aguardando aprovação (como os 3 lançamentos da Luciana Feilstrecker
+    do Bruno e os 2 da Maristela Weber) para barrar qualquer lançamento duplicado idêntico na planilha.
+    """
     autorizados_brutos = list(dados.get("autorizados", []))
     nao_aprovados_brutos = list(dados.get("nao_aprovados_amigo", []))
     pendentes_ass = list(dados.get("pendentes_assertec", []))
@@ -505,51 +644,72 @@ def _auditar_planilhas_e_barrar_duplicados(dados, mapa_amigo, mapa_assertec, map
         else:
             ainda_nao_aprovados.append(item)
 
-    grupos_iguais = {}
+    # Verifica duplicidade em TODAS as listas (Autorizados + Aguardando Aprovação + Pendentes Assertec)
+    contagem_global_chave = {}
+    linhas_por_chave = {}
+
+    for lista_origem in (autorizados_brutos, ainda_nao_aprovados, pendentes_ass):
+        for item in lista_origem:
+            tec = str(item.get("tecnico", item.get("TECNICO", ""))).strip().upper()
+            cli = normalizar_nome_cliente(item.get("cliente", item.get("CLIENTE", "")))
+            proto = limpar_protocolo_planilha(item.get("protocolo", item.get("PROTOCOLO", "")))
+            srv = normalizar_nome_cliente(item.get("servico", item.get("SERVICO", "")))
+            chave_dup = (tec, cli, proto, srv)
+            contagem_global_chave[chave_dup] = contagem_global_chave.get(chave_dup, 0) + 1
+            linhas_por_chave.setdefault(chave_dup, []).append(str(item.get("linha", item.get("LINHA", "?"))))
+
+    autorizados_finais = []
+    duplicados_barrados = []
+    protocolos_e_clientes_barrados = set()
+    chaves_ja_adicionadas_dup = set()
+
     for item in autorizados_brutos:
         tec = str(item.get("tecnico", item.get("TECNICO", ""))).strip().upper()
         cli = normalizar_nome_cliente(item.get("cliente", item.get("CLIENTE", "")))
         proto = limpar_protocolo_planilha(item.get("protocolo", item.get("PROTOCOLO", "")))
         srv = normalizar_nome_cliente(item.get("servico", item.get("SERVICO", "")))
+        chave_dup = (tec, cli, proto, srv)
+        qtd_vezes = contagem_global_chave.get(chave_dup, 1)
 
-        campos_extras = []
-        for k_ex in ("cabo", "metragem", "cidade", "data", "obs", "valor"):
-            val_ex = str(item.get(k_ex, item.get(k_ex.upper(), ""))).strip().upper()
-            if val_ex:
-                campos_extras.append(f"{k_ex}:{val_ex}")
-        extras_str = "|".join(campos_extras)
+        eh_plantao = "PLANTAO" in srv or proto == "123456"
+        conj_ass = assinaturas_distintas_assertec.get(proto) or assinaturas_distintas_assertec.get(cli) or set()
 
-        chave_dup = (tec, cli, proto, srv, extras_str)
-        grupos_iguais.setdefault(chave_dup, []).append(item)
-
-    autorizados_finais = []
-    duplicados_barrados = []
-    protocolos_e_clientes_barrados = set()
-
-    for chave_dup, lista_itens in grupos_iguais.items():
-        tec, cli, proto, srv, _ = chave_dup
-        if len(lista_itens) == 1:
-            autorizados_finais.append(lista_itens[0])
+        if qtd_vezes == 1 or (eh_plantao and len(conj_ass) >= qtd_vezes):
+            autorizados_finais.append(item)
         else:
-            conj_ass = assinaturas_distintas_assertec.get(proto) or assinaturas_distintas_assertec.get(cli) or set()
-            eh_plantao = "PLANTAO" in srv or proto == "123456"
+            linhas_str = ", ".join(linhas_por_chave.get(chave_dup, []))
+            motivo_bloqueio = f"🚫 PAGAMENTO BARRADO: Lançado {qtd_vezes}x igual na planilha (Linhas {linhas_str})"
+            if proto:
+                protocolos_e_clientes_barrados.add(proto)
+            if cli:
+                protocolos_e_clientes_barrados.add(cli)
+            copia_barrada = dict(item)
+            copia_barrada.pop("motivo", None)
+            copia_barrada["situacao_amigo"] = motivo_bloqueio
+            ainda_nao_aprovados.append(copia_barrada)
+            duplicados_barrados.append(copia_barrada)
+            chaves_ja_adicionadas_dup.add((tec, cli, proto, str(item.get("linha", ""))))
 
-            if len(conj_ass) >= len(lista_itens) and eh_plantao:
-                autorizados_finais.extend(lista_itens)
-            else:
-                linhas_str = ", ".join(str(x.get("linha", x.get("LINHA", "?"))) for x in lista_itens)
-                motivo_bloqueio = f"🚫 PAGAMENTO BARRADO: Lançado {len(lista_itens)}x igual na planilha (Linhas {linhas_str})"
-                if proto:
-                    protocolos_e_clientes_barrados.add(proto)
-                if cli:
-                    protocolos_e_clientes_barrados.add(cli)
-
-                for item_dup in lista_itens:
-                    copia_barrada = dict(item_dup)
-                    copia_barrada.pop("motivo", None)
-                    copia_barrada["situacao_amigo"] = motivo_bloqueio
-                    ainda_nao_aprovados.append(copia_barrada)
-                    duplicados_barrados.append(copia_barrada)
+    # Também marca na lista de 'ainda_nao_aprovados' (ex: Luciana Feilstrecker 3x no Bruno) como BARRADO POR DUPLICIDADE
+    for item in ainda_nao_aprovados:
+        tec = str(item.get("tecnico", item.get("TECNICO", ""))).strip().upper()
+        cli = normalizar_nome_cliente(item.get("cliente", item.get("CLIENTE", "")))
+        proto = limpar_protocolo_planilha(item.get("protocolo", item.get("PROTOCOLO", "")))
+        srv = normalizar_nome_cliente(item.get("servico", item.get("SERVICO", "")))
+        chave_dup = (tec, cli, proto, srv)
+        qtd_vezes = contagem_global_chave.get(chave_dup, 1)
+        if qtd_vezes > 1 and not ("PLANTAO" in srv or proto == "123456"):
+            linhas_str = ", ".join(linhas_por_chave.get(chave_dup, []))
+            motivo_bloqueio = f"🚫 PAGAMENTO BARRADO: Lançado {qtd_vezes}x igual na planilha (Linhas {linhas_str})"
+            item["situacao_amigo"] = motivo_bloqueio
+            if proto:
+                protocolos_e_clientes_barrados.add(proto)
+            if cli:
+                protocolos_e_clientes_barrados.add(cli)
+            id_lin = (tec, cli, proto, str(item.get("linha", "")))
+            if id_lin not in chaves_ja_adicionadas_dup:
+                duplicados_barrados.append(dict(item))
+                chaves_ja_adicionadas_dup.add(id_lin)
 
     novos_pendentes_ass = []
     for item in pendentes_ass:
@@ -570,6 +730,11 @@ def _auditar_planilhas_e_barrar_duplicados(dados, mapa_amigo, mapa_assertec, map
 
 
 def _disparar_relatorio_whatsapp_turno(dados_sheets, mapa_assertec, mapa_clientes_assertec, turno_atual="MANUAL"):
+    """
+    Envia para o WhatsApp de cada técnico os serviços feitos no dia com 🟢 (aprovado/OK) ou 🔴 (pendente/erro/duplicado):
+    - Às 12h: envia todos os serviços lançados no dia até as 12h.
+    - Às 21h: envia os serviços lançados no dia após as 12h (que ainda não foram enviados às 12h).
+    """
     from modulo_sf_base import enviar_notificacao_whatsapp_tecnico
 
     ctrl = _carregar_controle_wpp_dia()
@@ -577,6 +742,16 @@ def _disparar_relatorio_whatsapp_turno(dados_sheets, mapa_assertec, mapa_cliente
     notificados_12h = set(ctrl.get("notificados_12h", []))
     notificados_21h = set(ctrl.get("notificados_21h", []))
     chaves_barradas = set(dados_sheets.get("chaves_barradas", set()))
+
+    # Mapeia quais protocolos/clientes já estão com PAGAMENTO AUTORIZADO na planilha do técnico
+    aprovados_planilha = set()
+    for a in dados_sheets.get("autorizados", []):
+        pr = limpar_protocolo_planilha(a.get("protocolo", a.get("PROTOCOLO", "")))
+        cl = normalizar_nome_cliente(a.get("cliente", a.get("CLIENTE", "")))
+        if pr:
+            aprovados_planilha.add(pr)
+        if cl:
+            aprovados_planilha.add(cl)
 
     chaves_com_erro_planilha = set()
     for p in dados_sheets.get("pendentes_assertec", []):
@@ -612,9 +787,11 @@ def _disparar_relatorio_whatsapp_turno(dados_sheets, mapa_assertec, mapa_cliente
         foi_barrado_dup = (proto and proto in chaves_barradas) or (cli_norm and cli_norm in chaves_barradas)
 
         if foi_barrado_dup:
-            ok_assertec = False
+            tudo_ok = False
+            sufixo_status = " (DUPLICADO BARRADO)"
         elif eh_plantao:
-            ok_assertec = ("123456" in mapa_assertec) or ("PLANTAO" in mapa_clientes_assertec)
+            tudo_ok = ("123456" in mapa_assertec) or ("PLANTAO" in mapa_clientes_assertec)
+            sufixo_status = f" ({srv})"
         else:
             ok_proto = bool(proto and proto in mapa_assertec and mapa_assertec[proto].get("status") == "OK")
             ok_cli = bool(
@@ -622,17 +799,12 @@ def _disparar_relatorio_whatsapp_turno(dados_sheets, mapa_assertec, mapa_cliente
                 or (cli_sem_p and cli_sem_p in mapa_clientes_assertec and mapa_clientes_assertec[cli_sem_p].get("status") == "OK")
             )
             sem_pendencia = (proto not in chaves_com_erro_planilha) and (cli_norm not in chaves_com_erro_planilha)
-            ok_assertec = (ok_proto or ok_cli) and sem_pendencia
+            ja_autorizado = (proto in aprovados_planilha) or (cli_norm in aprovados_planilha)
+            tudo_ok = (ok_proto or ok_cli) and sem_pendencia and ja_autorizado
+            sufixo_status = "" if tudo_ok else (" (ERRO ASSERTEC)" if not (ok_proto or ok_cli) else " (AGUARDANDO/REPROVADO)")
 
-        bolinha = "🟢" if ok_assertec else "🔴"
-        if foi_barrado_dup:
-            nome_exibicao = f"{cli} (DUPLICADO BARRADO)"
-        elif eh_plantao:
-            nome_exibicao = f"{cli} ({srv})"
-        else:
-            nome_exibicao = cli
-
-        mensagens_por_tecnico.setdefault(tec, []).append(f"{bolinha} {nome_exibicao}")
+        bolinha = "🟢" if tudo_ok else "🔴"
+        mensagens_por_tecnico.setdefault(tec, []).append(f"{bolinha} {cli}{sufixo_status}")
         chaves_enviadas_neste_disparo.append(chave)
 
     hora_str = obter_agora_brasil().strftime("%H:%M")
@@ -691,7 +863,6 @@ def sincronizar_status_e_auditar_planilhas(mapa_amigo=None, silencioso=False):
             dados, mapa_amigo_enriquecido, mapa_assertec, mapa_clientes_assertec, assinaturas_distintas_assertec
         )
 
-        # Se encontrou duplicados idênticos, atualiza a planilha em 2º plano sem travar a tela
         chaves_barradas = dados.get("chaves_barradas", set())
         if chaves_barradas:
             def _bloq_bg():
@@ -782,16 +953,23 @@ def carregar_log_auto_sync():
     if os.path.exists(ARQUIVO_LOG_AUTO_SYNC):
         try:
             with open(ARQUIVO_LOG_AUTO_SYNC, "r", encoding="utf-8") as f:
-                return json.load(f)
+                dados = json.load(f)
+                dados.setdefault("turnos_executados", [])
+                return dados
         except Exception:
             pass
-    return {"ultimo_turno": "", "horario_execucao": "Ainda não executado hoje", "resumo": ""}
+    return {"ultimo_turno": "", "turnos_executados": [], "horario_execucao": "Ainda não executado hoje", "resumo": ""}
 
 
 def salvar_log_auto_sync(chave_turno, resumo_txt):
     agora_str = obter_agora_brasil().strftime("%d/%m/%Y às %H:%M:%S")
+    atual = carregar_log_auto_sync()
+    turnos_exec = list(atual.get("turnos_executados", []))
+    if chave_turno and chave_turno != "MANUAL" and chave_turno not in turnos_exec:
+        turnos_exec.append(chave_turno)
     dados_log = {
-        "ultimo_turno": chave_turno,
+        "ultimo_turno": chave_turno or atual.get("ultimo_turno", ""),
+        "turnos_executados": turnos_exec[-10:],
         "horario_execucao": agora_str,
         "resumo": resumo_txt
     }
@@ -838,38 +1016,53 @@ def executar_checagem_background_silenciosa(chave_turno):
         salvar_log_auto_sync(chave_turno, f"Falha na checagem automática: {e}")
 
 
+def _verificar_turno_pendente_agora():
+    """
+    Janela inteligente de recuperação:
+    - Das 12:00 às 20:59: garante que o turno de 12H seja executado se ainda não rodou hoje.
+    - Das 21:00 às 23:59: garante que o turno de 21H seja executado se ainda não rodou hoje.
+    """
+    agora = obter_agora_brasil()
+    data_hoje = agora.strftime("%Y-%m-%d")
+    hora = agora.hour
+
+    turno_alvo = None
+    if 12 <= hora < 21:
+        turno_alvo = f"{data_hoje}_12H"
+    elif hora >= 21:
+        turno_alvo = f"{data_hoje}_21H"
+
+    if turno_alvo:
+        log_atual = carregar_log_auto_sync()
+        turnos_feitos = set(log_atual.get("turnos_executados", []))
+        if log_atual.get("ultimo_turno") == turno_alvo:
+            turnos_feitos.add(turno_alvo)
+        if turno_alvo not in turnos_feitos:
+            # Marca imediatamente em andamento para não disparar duplicado
+            salvar_log_auto_sync(turno_alvo, "Executando leitura automática...")
+            executar_checagem_background_silenciosa(turno_alvo)
+
+
 def iniciar_agendador_12h_21h():
-    """Inicia uma única Thread em segundo plano que dispara a conferência todo dia às 12h e às 21h."""
-    global _AGENDADOR_INICIADO
+    """
+    Inicia e mantém viva a Thread em segundo plano que dispara a conferência todo dia às 12h e às 21h
+    (com recuperação automática caso o servidor estivesse hibernando às 12:00 ou 21:00).
+    """
+    global _THREAD_AGENDADOR
     with _LOCK_AGENDADOR:
-        if _AGENDADOR_INICIADO:
+        if _THREAD_AGENDADOR is not None and _THREAD_AGENDADOR.is_alive():
             return
-        _AGENDADOR_INICIADO = True
 
-    def _loop_relogio():
-        while True:
-            try:
-                agora = obter_agora_brasil()
-                data_hoje = agora.strftime("%Y-%m-%d")
-                hora = agora.hour
-                minuto = agora.minute
+        def _loop_relogio():
+            while True:
+                try:
+                    _verificar_turno_pendente_agora()
+                except Exception:
+                    pass
+                time.sleep(20)
 
-                turno_alvo = None
-                if hora == 12 and minuto <= 30:
-                    turno_alvo = f"{data_hoje}_12H"
-                elif hora == 21 and minuto <= 30:
-                    turno_alvo = f"{data_hoje}_21H"
-
-                if turno_alvo:
-                    log_atual = carregar_log_auto_sync()
-                    if log_atual.get("ultimo_turno") != turno_alvo:
-                        executar_checagem_background_silenciosa(turno_alvo)
-            except Exception:
-                pass
-            time.sleep(30)
-
-    t = threading.Thread(target=_loop_relogio, daemon=True)
-    t.start()
+        _THREAD_AGENDADOR = threading.Thread(target=_loop_relogio, daemon=True)
+        _THREAD_AGENDADOR.start()
 
 
 def formatar_moeda_br(valor):
